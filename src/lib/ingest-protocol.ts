@@ -1,9 +1,14 @@
 export type IngestPhase = "reading" | "extracting" | "chunking" | "saving";
 
-export type IngestErrorCode = "not-pdf" | "encrypted" | "no-text" | "unknown";
+export type IngestErrorCode =
+  "not-pdf" | "encrypted" | "no-text" | "no-subject" | "unknown";
 
 /** UI → worker */
-export type IngestRequest = { type: "ingest"; file: File };
+export type IngestRequest = {
+  type: "ingest";
+  file: File;
+  subjectId: number;
+};
 
 /** worker → UI */
 export type IngestMessage =
@@ -18,6 +23,7 @@ export type IngestMessage =
 
 export const INGEST_ERROR_MESSAGES: Record<IngestErrorCode, string> = {
   "not-pdf": "El archivo no es un PDF válido.",
+  "no-subject": "La asignatura ya no existe. Recarga la página.",
   encrypted:
     "El PDF está protegido con contraseña. Quítala y vuelve a subirlo.",
   "no-text":

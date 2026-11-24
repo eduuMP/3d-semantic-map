@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Asignaturas: selector, crear, renombrar y borrar (con confirmación y recuento de PDFs); cada PDF pertenece a una asignatura y la activa se recuerda entre recargas (H1c)
+- Esquema Dexie v2 (`subjects`, `subjectId` en `documents`, `chunks` y `topics`) con migración que deja lo ya subido en «Mis apuntes» y test con `fake-indexeddb` (H1c)
+- `validateSubjectName` y `resolveActiveSubject` con tests; `deleteSubjectCascade` (H1c)
 - Subida de varios PDFs a la vez (seleccionar o arrastrar), procesados de uno en uno con progreso por archivo; un PDF que falla no detiene a los demás (H1b)
 - Lista de documentos con totales y botón "Quitar" con confirmación; borra el documento y sus fragmentos (H1b)
 - Aviso de duplicados (mismo nombre y tamaño) con `planUploads` y tests (H1b)
@@ -20,6 +23,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 - `prettier` como devDependency (lo usa el hook de formato) (H0)
 
 ### Changed
+- Los duplicados se comprueban dentro de cada asignatura: el mismo PDF puede estar en dos (H1c)
+- `deleteDocumentCascade` borra también las tarjetas de sus fragmentos (H1c)
+- Los controles nativos (selector) siguen el tema claro/oscuro del navegador (H1c)
 - Subir un PDF ya no sustituye a los anteriores: se acumulan (H1b)
 - `@types/node` a ^24 (requerido por vitest 5, igual que Node 24 de CI) (H0)
 - `README.md` y `CHANGELOG.md` dejan de estar en `.gitignore` y se versionan (H0)
