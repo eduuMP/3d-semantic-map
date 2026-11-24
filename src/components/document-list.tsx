@@ -5,13 +5,29 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db, deleteDocumentCascade } from "@/lib/db";
 
 export function DocumentList() {
+  // `undefined` = cargando, `null` = error al leer IndexedDB.
   const documents = useLiveQuery(
-    () => db.documents.orderBy("createdAt").toArray(),
+    () =>
+      db.documents
+        .orderBy("createdAt")
+        .toArray()
+        .catch((e) => {
+          console.error("[document-list] no se pudo leer la base de datos", e);
+          return null;
+        }),
     [],
   );
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  if (documents === null) {
+    return (
+      <p role="alert" className="rounded-lg bg-red-500/15 p-3 text-sm">
+        No se pudo leer el almacenamiento del navegador. Cierra otras pestañas
+        de la app y recarga.
+      </p>
+    );
+  }
   if (!documents || documents.length === 0) return null;
 
   const totalPages = documents.reduce((sum, d) => sum + d.pages, 0);
@@ -55,6 +71,7 @@ export function DocumentList() {
                 <button
                   type="button"
                   onClick={() => remove(doc.id)}
+                  aria-label={`Sí, quitar ${doc.name}`}
                   className="rounded bg-red-600 px-2 py-1 text-white"
                 >
                   Sí, quitar
@@ -62,6 +79,7 @@ export function DocumentList() {
                 <button
                   type="button"
                   onClick={() => setConfirmingId(null)}
+                  autoFocus
                   className="rounded border border-current/30 px-2 py-1"
                 >
                   No

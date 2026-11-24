@@ -67,6 +67,9 @@ export function PdfUpload() {
   const [dragging, setDragging] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Se activa de forma síncrona (antes de cualquier await) para evitar dos colas a la vez.
+  const busyRef = useRef(false);
+  const nextKeyRef = useRef(0);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
 
@@ -83,6 +86,7 @@ export function PdfUpload() {
       const stop = () => {
         workerRef.current?.terminate();
         workerRef.current = null;
+        busyRef.current = false;
         setBusy(false);
       };
 
@@ -107,7 +111,16 @@ export function PdfUpload() {
           current: 0,
           total: 1,
         });
-        ensureWorker().postMessage({ type: "ingest", file: current.file });
+        try {
+          ensureWorker().postMessage({ type: "ingest", file: current.file });
+        } catch (e) {
+          console.error("[pdf-upload] no se pudo iniciar el worker", e);
+          update(current.key, {
+            status: "error",
+            message: INGEST_ERROR_MESSAGES.unknown,
+          });
+          advance();
+        }
       };
 
       const advance = () => {
@@ -116,6 +129,7 @@ export function PdfUpload() {
       };
 
       function onMessage(event: MessageEvent<IngestMessage>) {
+        if (event.currentTarget !== workerRef.current) return;
         const message = event.data;
         const key = queue[position]?.key;
         if (key === undefined) return;
@@ -144,6 +158,7 @@ export function PdfUpload() {
       }
 
       function onWorkerCrash(e: ErrorEvent) {
+        if (e.currentTarget !== workerRef.current) return;
         console.error("[pdf-upload] error del worker", e.message, e);
         const key = queue[position]?.key;
         if (key !== undefined) {
@@ -166,7 +181,12 @@ export function PdfUpload() {
   const handleFiles = useCallback(
     async (list: FileList | File[] | null | undefined) => {
       const files = Array.from(list ?? []);
-      if (files.length === 0 || busy) return;
+      if (files.length === 0) return;
+      if (busyRef.current) {
+        setError("Espera a que termine la subida actual para añadir más PDFs.");
+        return;
+      }
+      busyRef.current = true;
       setError(null);
 
       let existing;
@@ -177,17 +197,17 @@ export function PdfUpload() {
         setError(
           "No se pudo abrir el almacenamiento del navegador. Cierra otras pestañas de la app y recarga.",
         );
+        busyRef.current = false;
         return;
       }
 
       const plan = planUploads(files, existing);
-      const base = Date.now();
-      const queue: QueueEntry[] = plan.toProcess.map((file, i) => ({
-        key: base + i,
+      const queue: QueueEntry[] = plan.toProcess.map((file) => ({
+        key: nextKeyRef.current++,
         file,
       }));
-      const duplicates: QueueItem[] = plan.duplicates.map((file, i) => ({
-        key: base + queue.length + i,
+      const duplicates: QueueItem[] = plan.duplicates.map((file) => ({
+        key: nextKeyRef.current++,
         name: file.name,
         status: "duplicate",
       }));
@@ -203,17 +223,30 @@ export function PdfUpload() {
       if (queue.length > 0) {
         setBusy(true);
         runQueue(queue);
+      } else {
+        busyRef.current = false;
       }
     },
-    [busy, runQueue],
+    [runQueue],
   );
+
+  const total = items.filter((i) => i.status !== "duplicate").length;
+  const doneCount = items.filter((i) => i.status === "done").length;
+  const errorCount = items.filter((i) => i.status === "error").length;
+  const duplicateCount = items.length - total;
+  const active = items.find((i) => i.status === "processing");
+  const summary = active
+    ? `Procesando ${doneCount + errorCount + 1} de ${total}: ${active.name}`
+    : items.length > 0 && !busy
+      ? `Subida terminada: ${doneCount} listos, ${errorCount} con error, ${duplicateCount} ya estaban subidos`
+      : "";
 
   return (
     <section className="flex w-full max-w-xl flex-col gap-4">
       <div
         onDragOver={(e) => {
           e.preventDefault();
-          setDragging(true);
+          setDragging(!busy);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -263,8 +296,12 @@ export function PdfUpload() {
         </p>
       )}
 
+      <p role="status" className="sr-only">
+        {summary}
+      </p>
+
       {items.length > 0 && (
-        <ul className="flex flex-col gap-2 text-left" role="status">
+        <ul className="flex flex-col gap-2 text-left">
           {items.map((item) => (
             <li
               key={item.key}
@@ -290,7 +327,14 @@ export function PdfUpload() {
                 {itemLabel(item)}
               </p>
               {item.status === "processing" && (
-                <div className="h-2 overflow-hidden rounded-full bg-current/15">
+                <div
+                  role="progressbar"
+                  aria-label={`Progreso de ${item.name}`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent(item)}
+                  className="h-2 overflow-hidden rounded-full bg-current/15"
+                >
                   <div
                     className="h-full bg-blue-600 transition-[width]"
                     style={{ width: `${percent(item)}%` }}
