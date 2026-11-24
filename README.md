@@ -13,7 +13,7 @@ npm install && npm run dev
 ## Scripts
 
 - `npm run dev` · `npm run build`
-- `npm run check` = `lint` + `typecheck` + `test` (lo mismo que ejecuta CI)
+- `npm run check` = `lint` + `typecheck` + `test` (CI ejecuta además `npm run build`)
 
 ## Uso
 
@@ -27,4 +27,4 @@ Abre http://localhost:3000, sube un PDF y haz clic en un tema del mapa.
 
 ## Contribuir
 
-Flujo de trabajo en `docs/workflow.md`: una rama por historia (`feature/hN-…`), `npm run check` antes de cada commit, Conventional Commits y PR con preview de Vercel antes de integrar en `main`.
+Una rama por historia (`feature/hN-descripcion`), `npm run check` antes de cada commit, Conventional Commits en minúsculas y español, y PR con preview de Vercel antes de integrar en `main`.
