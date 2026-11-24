@@ -1,3 +1,4 @@
+import { DocumentList } from "@/components/document-list";
 import { PdfUpload } from "@/components/pdf-upload";
 import { WebGpuGate } from "@/components/webgpu-gate";
 
@@ -8,6 +9,7 @@ export default function Home() {
         <h1 className="text-3xl font-semibold">Mapa semántico 3D</h1>
         <p>Convierte tus apuntes en PDF en un mapa 3D de temas.</p>
         <PdfUpload />
+        <DocumentList />
       </main>
     </WebGpuGate>
   );

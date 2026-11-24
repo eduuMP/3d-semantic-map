@@ -108,6 +108,14 @@ describe("chunkPages", () => {
     expect(out.map((c) => c.index)).toEqual(out.map((_, i) => i));
   });
 
+  it("numera desde 0 en cada llamada (el índice es por documento)", () => {
+    const doc = [{ page: 1, text: words(60) }];
+    const a = chunkPages(doc, { maxWords: 40, overlapWords: 10 });
+    const b = chunkPages(doc, { maxWords: 40, overlapWords: 10 });
+    expect(a[0].index).toBe(0);
+    expect(b[0].index).toBe(0);
+  });
+
   it("lanza error si el solape no es menor que el máximo", () => {
     expect(() =>
       chunkPages([{ page: 1, text: words(50) }], {
