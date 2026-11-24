@@ -40,6 +40,8 @@ describe("migración v1 → v2", () => {
   it("conserva documentos y fragmentos y los mueve a «Mis apuntes»", async () => {
     const name = freshName();
     const legacy = track(new LegacyV1(name));
+    await legacy.open();
+    expect(await Dexie.exists(name)).toBe(true);
     const docA = (await legacy.table("documents").add({
       name: "a.pdf",
       size: 1,
@@ -59,6 +61,18 @@ describe("migración v1 → v2", () => {
       { documentId: docA, index: 1, page: 2, text: "dos" },
       { documentId: docB, index: 0, page: 1, text: "tres" },
     ]);
+    const topicId = (await legacy.table("topics").add({
+      documentId: docA,
+      name: "Tema",
+    })) as number;
+    await legacy.table("cards").add({
+      topicId,
+      chunkId: 1,
+      question: "q",
+      answer: "a",
+      correct: 0,
+      wrong: 0,
+    });
     legacy.close();
 
     const upgraded = track(new AppDb(name));
@@ -72,11 +86,22 @@ describe("migración v1 → v2", () => {
     expect(chunks.map((c) => c.text).sort()).toEqual(["dos", "tres", "uno"]);
     expect(documents.every((d) => d.subjectId === subjects[0].id)).toBe(true);
     expect(chunks.every((c) => c.subjectId === subjects[0].id)).toBe(true);
+
+    const topics = await upgraded.topics.toArray();
+    expect(topics).toHaveLength(1);
+    expect(topics[0].subjectId).toBe(subjects[0].id);
+    expect(topics[0].name).toBe("Tema");
+    expect("documentId" in topics[0]).toBe(false);
+    expect(await upgraded.cards.count()).toBe(1);
   });
 
   it("migra también una base v1 vacía", async () => {
     const name = freshName();
-    track(new LegacyV1(name)).close();
+    const legacy = track(new LegacyV1(name));
+    await legacy.open();
+    legacy.close();
+    expect(await Dexie.exists(name)).toBe(true);
+
     const upgraded = track(new AppDb(name));
     expect(await upgraded.subjects.count()).toBe(1);
     expect(await upgraded.documents.count()).toBe(0);
@@ -90,7 +115,10 @@ describe("migración v1 → v2", () => {
 
   it("abrir dos veces no duplica la asignatura por defecto", async () => {
     const name = freshName();
-    track(new AppDb(name)).close();
+    const first = track(new AppDb(name));
+    await first.open();
+    expect(await first.subjects.count()).toBe(1);
+    first.close();
     const again = track(new AppDb(name));
     expect(await again.subjects.count()).toBe(1);
   });
@@ -123,15 +151,18 @@ describe("borrado en cascada", () => {
     };
     const d1 = await mk(s1, "a.pdf");
     const d2 = await mk(s2, "b.pdf");
+    const topic1 = (await database.topics.add({ subjectId: s1 })) as number;
     const topic2 = (await database.topics.add({ subjectId: s2 })) as number;
-    await database.cards.add({
-      topicId: topic2,
-      chunkId: d2.chunkId,
+    const card = (topicId: number, chunkId: number) => ({
+      topicId,
+      chunkId,
       question: "q",
       answer: "a",
       correct: 0,
       wrong: 0,
     });
+    await database.cards.add(card(topic1, d1.chunkId));
+    await database.cards.add(card(topic2, d2.chunkId));
     return { s1, s2, d1, d2 };
   }
 
@@ -144,8 +175,10 @@ describe("borrado en cascada", () => {
     expect((await database.subjects.toArray()).map((s) => s.id)).toEqual([s1]);
     expect(await database.documents.count()).toBe(1);
     expect(await database.chunks.count()).toBe(1);
-    expect(await database.topics.count()).toBe(0);
-    expect(await database.cards.count()).toBe(0);
+    // Lo de la otra asignatura sobrevive (tema y tarjeta de s1).
+    expect(await database.topics.count()).toBe(1);
+    expect((await database.topics.toArray())[0].subjectId).toBe(s1);
+    expect(await database.cards.count()).toBe(1);
   });
 
   it("deleteDocumentCascade borra el documento, sus fragmentos y sus tarjetas", async () => {
@@ -157,6 +190,10 @@ describe("borrado en cascada", () => {
     expect(await database.documents.count()).toBe(1);
     expect((await database.documents.toArray())[0].id).toBe(d1.documentId);
     expect(await database.chunks.count()).toBe(1);
-    expect(await database.cards.count()).toBe(0);
+    // Solo se va la tarjeta del documento borrado; los temas no se tocan.
+    const cards = await database.cards.toArray();
+    expect(cards).toHaveLength(1);
+    expect(cards[0].chunkId).toBe(d1.chunkId);
+    expect(await database.topics.count()).toBe(2);
   });
 });

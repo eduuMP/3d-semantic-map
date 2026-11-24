@@ -84,8 +84,12 @@ async function ingest(file: File, subjectId: number) {
   post({ type: "progress", phase: "saving", current: 0, total: chunks.length });
   const documentId = await db.transaction(
     "rw",
-    [db.documents, db.chunks],
+    [db.subjects, db.documents, db.chunks],
     async () => {
+      // La asignatura pudo borrarse (otra pestaña) durante la extracción.
+      if (!(await db.subjects.get(subjectId))) {
+        throw new IngestError("no-subject", "La asignatura ya no existe");
+      }
       const id = await db.documents.add({
         subjectId,
         name: file.name,

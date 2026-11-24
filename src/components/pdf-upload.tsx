@@ -77,7 +77,23 @@ export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
   const busyRef = useRef(false);
   const nextKeyRef = useRef(0);
 
-  useEffect(() => () => workerRef.current?.terminate(), []);
+  const onBusyChangeRef = useRef(onBusyChange);
+  useEffect(() => {
+    onBusyChangeRef.current = onBusyChange;
+  }, [onBusyChange]);
+
+  useEffect(
+    () => () => {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      // Si se desmonta con una subida en curso, el padre no debe quedarse bloqueado.
+      if (busyRef.current) {
+        busyRef.current = false;
+        onBusyChangeRef.current?.(false);
+      }
+    },
+    [],
+  );
 
   const changeBusy = useCallback(
     (value: boolean) => {

@@ -24,6 +24,9 @@ export function Library() {
   );
   const [storedId, setStoredId] = useStoredSubjectId();
   const [uploading, setUploading] = useState(false);
+  // Asignatura congelada mientras se sube un PDF: un cambio externo (otra
+  // pestaña, crear una nueva) no debe desmontar la subida en curso.
+  const [lockedId, setLockedId] = useState<number | null>(null);
 
   if (subjects === null) {
     return (
@@ -35,7 +38,13 @@ export function Library() {
   }
   if (!subjects) return null;
 
-  const activeId = resolveActiveSubject(subjects, storedId);
+  const resolvedId = resolveActiveSubject(subjects, storedId);
+  const activeId = uploading && lockedId !== null ? lockedId : resolvedId;
+
+  const handleBusyChange = (busy: boolean) => {
+    setUploading(busy);
+    setLockedId(busy ? resolvedId : null);
+  };
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
@@ -50,7 +59,7 @@ export function Library() {
           <PdfUpload
             key={activeId}
             subjectId={activeId}
-            onBusyChange={setUploading}
+            onBusyChange={handleBusyChange}
           />
           <DocumentList subjectId={activeId} />
         </>

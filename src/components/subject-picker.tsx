@@ -30,7 +30,11 @@ export function SubjectPicker({
     () =>
       activeId === null
         ? 0
-        : db.documents.where("subjectId").equals(activeId).count(),
+        : db.documents
+            .where("subjectId")
+            .equals(activeId)
+            .count()
+            .catch(() => 0),
     [activeId],
   );
 
@@ -58,10 +62,10 @@ export function SubjectPicker({
       if (effectiveMode === "renaming" && active) {
         await db.subjects.update(active.id, { name: result.name });
       } else {
-        const id = (await db.subjects.add({
+        const id = await db.subjects.add({
           name: result.name,
           createdAt: Date.now(),
-        } as SubjectRecord)) as number;
+        });
         onSelect(id);
       }
       reset();
@@ -108,6 +112,7 @@ export function SubjectPicker({
           />
           <button
             type="submit"
+            disabled={disabled}
             className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white"
           >
             Guardar
@@ -145,6 +150,7 @@ export function SubjectPicker({
           <button
             type="button"
             onClick={confirmDelete}
+            disabled={disabled}
             aria-label={`Sí, borrar ${active.name}`}
             className="rounded bg-red-600 px-3 py-1 text-white"
           >
