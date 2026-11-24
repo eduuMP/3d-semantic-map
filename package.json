@@ -12,7 +12,9 @@
     "check": "npm run lint && npm run typecheck && vitest run"
   },
   "dependencies": {
+    "dexie": "^4.4.7",
     "next": "16.4.6",
+    "pdfjs-dist": "^6.5.438",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
