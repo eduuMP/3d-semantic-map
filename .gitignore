@@ -33,5 +33,4 @@ npm-debug.log*
 .claude/
 CLAUDE.md
 CLAUDE.local.md
-*.md
 docs/
