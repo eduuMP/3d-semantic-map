@@ -53,7 +53,7 @@ async function extractPages(data: Uint8Array): Promise<PageText[]> {
   return pages;
 }
 
-async function ingest(file: File) {
+async function ingest(file: File, subjectId: number) {
   post({ type: "progress", phase: "reading", current: 0, total: 1 });
   const data = new Uint8Array(await file.arrayBuffer());
   if (!hasPdfSignature(data)) {
@@ -87,6 +87,7 @@ async function ingest(file: File) {
     [db.documents, db.chunks],
     async () => {
       const id = await db.documents.add({
+        subjectId,
         name: file.name,
         size: file.size,
         pages: pages.length,
@@ -96,6 +97,7 @@ async function ingest(file: File) {
       await db.chunks.bulkAdd(
         chunks.map((c) => ({
           documentId: id,
+          subjectId,
           index: c.index,
           page: c.page,
           text: c.text,
@@ -116,7 +118,7 @@ async function ingest(file: File) {
 self.onmessage = async (event: MessageEvent<IngestRequest>) => {
   if (event.data.type !== "ingest") return;
   try {
-    await ingest(event.data.file);
+    await ingest(event.data.file, event.data.subjectId);
   } catch (error) {
     if (error instanceof IngestError) {
       post({ type: "error", code: error.code, message: error.message });

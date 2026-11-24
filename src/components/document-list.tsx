@@ -4,18 +4,19 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, deleteDocumentCascade } from "@/lib/db";
 
-export function DocumentList() {
+export function DocumentList({ subjectId }: { subjectId: number }) {
   // `undefined` = cargando, `null` = error al leer IndexedDB.
   const documents = useLiveQuery(
     () =>
       db.documents
-        .orderBy("createdAt")
-        .toArray()
+        .where("subjectId")
+        .equals(subjectId)
+        .sortBy("createdAt")
         .catch((e) => {
           console.error("[document-list] no se pudo leer la base de datos", e);
           return null;
         }),
-    [],
+    [subjectId],
   );
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

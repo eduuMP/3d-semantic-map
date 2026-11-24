@@ -60,7 +60,13 @@ function itemLabel(item: QueueItem) {
 
 type QueueEntry = { key: number; file: File };
 
-export function PdfUpload() {
+type PdfUploadProps = {
+  subjectId: number;
+  /** Avisa al padre de si hay una subida en curso (para bloquear el cambio de asignatura). */
+  onBusyChange?: (busy: boolean) => void;
+};
+
+export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +78,15 @@ export function PdfUpload() {
   const nextKeyRef = useRef(0);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
+
+  const changeBusy = useCallback(
+    (value: boolean) => {
+      busyRef.current = value;
+      setBusy(value);
+      onBusyChange?.(value);
+    },
+    [onBusyChange],
+  );
 
   const update = useCallback((key: number, patch: Partial<QueueItem>) => {
     setItems((prev) =>
@@ -86,8 +101,7 @@ export function PdfUpload() {
       const stop = () => {
         workerRef.current?.terminate();
         workerRef.current = null;
-        busyRef.current = false;
-        setBusy(false);
+        changeBusy(false);
       };
 
       const ensureWorker = () => {
@@ -112,7 +126,11 @@ export function PdfUpload() {
           total: 1,
         });
         try {
-          ensureWorker().postMessage({ type: "ingest", file: current.file });
+          ensureWorker().postMessage({
+            type: "ingest",
+            file: current.file,
+            subjectId,
+          });
         } catch (e) {
           console.error("[pdf-upload] no se pudo iniciar el worker", e);
           update(current.key, {
@@ -175,7 +193,7 @@ export function PdfUpload() {
 
       next();
     },
-    [update],
+    [update, changeBusy, subjectId],
   );
 
   const handleFiles = useCallback(
@@ -186,18 +204,21 @@ export function PdfUpload() {
         setError("Espera a que termine la subida actual para añadir más PDFs.");
         return;
       }
-      busyRef.current = true;
+      changeBusy(true);
       setError(null);
 
       let existing;
       try {
-        existing = await db.documents.toArray();
+        existing = await db.documents
+          .where("subjectId")
+          .equals(subjectId)
+          .toArray();
       } catch (e) {
         console.error("[pdf-upload] no se pudo abrir la base de datos", e);
         setError(
           "No se pudo abrir el almacenamiento del navegador. Cierra otras pestañas de la app y recarga.",
         );
-        busyRef.current = false;
+        changeBusy(false);
         return;
       }
 
@@ -221,13 +242,12 @@ export function PdfUpload() {
       ]);
 
       if (queue.length > 0) {
-        setBusy(true);
         runQueue(queue);
       } else {
-        busyRef.current = false;
+        changeBusy(false);
       }
     },
-    [runQueue],
+    [runQueue, changeBusy, subjectId],
   );
 
   const total = items.filter((i) => i.status !== "duplicate").length;

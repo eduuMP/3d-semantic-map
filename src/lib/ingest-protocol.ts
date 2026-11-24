@@ -3,7 +3,11 @@ export type IngestPhase = "reading" | "extracting" | "chunking" | "saving";
 export type IngestErrorCode = "not-pdf" | "encrypted" | "no-text" | "unknown";
 
 /** UI → worker */
-export type IngestRequest = { type: "ingest"; file: File };
+export type IngestRequest = {
+  type: "ingest";
+  file: File;
+  subjectId: number;
+};
 
 /** worker → UI */
 export type IngestMessage =
