@@ -1,0 +1,23 @@
+{
+  "name": "mapa-semantico-3d-dev",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [3000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "vitest.explorer"
+      ]
+    }
+  },
+  "postCreateCommand": "if [ -f package.json ]; then npm install; fi"
+}

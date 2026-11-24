@@ -1,0 +1,37 @@
+# === SECRETOS: nunca subir API keys ===
+.env
+.env.local
+.env.production
+.env*.local
+
+# === DEPENDENCIAS ===
+node_modules/
+
+# === BUILD (se regenera en cada deploy) ===
+.next/
+out/
+dist/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# === VERCEL ===
+.vercel/
+
+# === TESTS ===
+coverage/
+
+# === SISTEMA OPERATIVO ===
+.DS_Store
+Thumbs.db
+
+# === LOGS ===
+*.log
+npm-debug.log*
+
+# === CLAUDE Y DOCUMENTACIÓN (solo en local) ===
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+*.md
+docs/
