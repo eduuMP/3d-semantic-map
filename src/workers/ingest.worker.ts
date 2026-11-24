@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { chunkPages, type PageText } from "../lib/chunking";
-import { db, deleteDocumentCascade } from "../lib/db";
+import { db } from "../lib/db";
 import type {
   IngestErrorCode,
   IngestMessage,
@@ -79,17 +79,13 @@ async function ingest(file: File) {
     throw new IngestError("no-text", "El PDF no contiene texto extraíble");
   }
 
-  // Un PDF nuevo sustituye al anterior (varios PDFs están en el backlog).
-  // Borrado e inserción van en UNA transacción: si algo falla, no se pierde
-  // el documento anterior.
+  // Solo se añade: los PDFs anteriores se conservan. Documento y fragmentos
+  // se guardan en una sola transacción, así un fallo no deja datos a medias.
   post({ type: "progress", phase: "saving", current: 0, total: chunks.length });
   const documentId = await db.transaction(
     "rw",
-    [db.documents, db.chunks, db.topics, db.cards],
+    [db.documents, db.chunks],
     async () => {
-      const previous = await db.documents.toCollection().primaryKeys();
-      for (const id of previous) await deleteDocumentCascade(id);
-
       const id = await db.documents.add({
         name: file.name,
         size: file.size,
