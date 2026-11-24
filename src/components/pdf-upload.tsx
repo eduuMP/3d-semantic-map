@@ -54,7 +54,14 @@ export function PdfUpload() {
       .then((latest) => {
         if (!cancelled) setDocumentRecord(latest);
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        console.error("[pdf-upload] no se pudo abrir la base de datos", e);
+        if (!cancelled) {
+          setError(
+            "No se pudo abrir el almacenamiento del navegador. Cierra otras pestañas de la app y recarga.",
+          );
+        }
+      });
     return () => {
       cancelled = true;
       workerRef.current?.terminate();

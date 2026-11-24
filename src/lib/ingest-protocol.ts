@@ -1,6 +1,6 @@
 export type IngestPhase = "reading" | "extracting" | "chunking" | "saving";
 
-export type IngestErrorCode = "not-pdf" | "no-text" | "unknown";
+export type IngestErrorCode = "not-pdf" | "encrypted" | "no-text" | "unknown";
 
 /** UI → worker */
 export type IngestRequest = { type: "ingest"; file: File };
@@ -18,6 +18,8 @@ export type IngestMessage =
 
 export const INGEST_ERROR_MESSAGES: Record<IngestErrorCode, string> = {
   "not-pdf": "El archivo no es un PDF válido.",
+  encrypted:
+    "El PDF está protegido con contraseña. Quítala y vuelve a subirlo.",
   "no-text":
     "Este PDF no tiene texto (¿está escaneado?). Prueba con un PDF con texto seleccionable.",
   unknown: "No se pudo procesar el PDF.",

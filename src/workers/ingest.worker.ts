@@ -64,6 +64,9 @@ async function ingest(file: File) {
   try {
     pages = await extractPages(data);
   } catch (error) {
+    if (error instanceof Error && error.name === "PasswordException") {
+      throw new IngestError("encrypted", "PDF protegido con contraseña");
+    }
     throw new IngestError(
       "not-pdf",
       error instanceof Error ? error.message : "PDF ilegible",
@@ -77,14 +80,16 @@ async function ingest(file: File) {
   }
 
   // Un PDF nuevo sustituye al anterior (varios PDFs están en el backlog).
+  // Borrado e inserción van en UNA transacción: si algo falla, no se pierde
+  // el documento anterior.
   post({ type: "progress", phase: "saving", current: 0, total: chunks.length });
-  const previous = await db.documents.toCollection().primaryKeys();
-  for (const id of previous) await deleteDocumentCascade(id);
-
   const documentId = await db.transaction(
     "rw",
-    [db.documents, db.chunks],
+    [db.documents, db.chunks, db.topics, db.cards],
     async () => {
+      const previous = await db.documents.toCollection().primaryKeys();
+      for (const id of previous) await deleteDocumentCascade(id);
+
       const id = await db.documents.add({
         name: file.name,
         size: file.size,

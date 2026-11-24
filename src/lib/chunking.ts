@@ -8,12 +8,15 @@ export type ChunkOptions = {
   overlapWords?: number;
   /** Páginas con menos palabras que esto se descartan (p. ej. solo el nº de página). */
   minWords?: number;
+  /** Si tras un fragmento quedan menos palabras nuevas que esto, se absorben en él. */
+  minTailWords?: number;
 };
 
 export const DEFAULT_CHUNK_OPTIONS = {
   maxWords: 350,
   overlapWords: 35,
-  minWords: 15,
+  minWords: 4,
+  minTailWords: 15,
 } as const satisfies Required<ChunkOptions>;
 
 /** Une palabras cortadas con guion a final de línea y colapsa espacios. */
@@ -32,7 +35,7 @@ export function chunkPages(
   pages: PageText[],
   options: ChunkOptions = {},
 ): Chunk[] {
-  const { maxWords, overlapWords, minWords } = {
+  const { maxWords, overlapWords, minWords, minTailWords } = {
     ...DEFAULT_CHUNK_OPTIONS,
     ...options,
   };
@@ -49,9 +52,13 @@ export function chunkPages(
     if (words.length === 0 || words.length < minWords) continue;
 
     for (let start = 0; start < words.length; start += step) {
-      const slice = words.slice(start, start + maxWords);
+      const end = start + maxWords;
+      const tail = words.length - end;
+      // Un resto diminuto (casi todo solape) se absorbe en este fragmento.
+      const absorbTail = tail > 0 && tail < minTailWords;
+      const slice = words.slice(start, absorbTail ? words.length : end);
       chunks.push({ page, index: chunks.length, text: slice.join(" ") });
-      if (start + maxWords >= words.length) break;
+      if (tail <= 0 || absorbTail) break;
     }
   }
 

@@ -32,6 +32,24 @@ describe("chunkPages", () => {
     expect(chunkPages([])).toEqual([]);
   });
 
+  it("conserva páginas cortas de diapositiva (~10 palabras)", () => {
+    const out = chunkPages([{ page: 7, text: words(10) }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].page).toBe(7);
+  });
+
+  it("absorbe un resto diminuto en el último fragmento en vez de crear uno casi duplicado", () => {
+    const out = chunkPages([{ page: 1, text: words(351) }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].text.split(" ")).toHaveLength(351);
+  });
+
+  it("crea un segundo fragmento cuando el resto es significativo", () => {
+    const out = chunkPages([{ page: 1, text: words(400) }]);
+    expect(out).toHaveLength(2);
+    expect(out[1].text.split(" ").at(-1)).toBe("w399");
+  });
+
   it("descarta páginas vacías o casi vacías", () => {
     const out = chunkPages([
       { page: 1, text: "   \n  " },
