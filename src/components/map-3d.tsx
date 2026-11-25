@@ -76,11 +76,14 @@ export function Map3D({
   points,
   topics,
   onSelect,
+  onSelectTopic,
 }: {
   points: MapPoint[];
   topics: MapTopic[];
   /** Se llama con el id del fragmento al hacer clic en un punto. */
   onSelect?: (chunkId: number) => void;
+  /** Se llama con el id del tema al hacer clic en su entrada de la leyenda. */
+  onSelectTopic?: (topicId: number) => void;
 }) {
   const dark = useIsDark();
   const textColor = dark ? "#ededed" : "#171717";
@@ -153,17 +156,24 @@ export function Map3D({
   );
 
   return (
-    <div className="relative left-1/2 w-[min(64rem,calc(100vw-4rem))] -translate-x-1/2 text-left">
+    <div className="relative left-1/2 mt-6 w-[min(64rem,calc(100vw-4rem))] -translate-x-1/2 text-left">
       <p className="mb-2 text-sm opacity-80">
         Cada punto es un fragmento de tus apuntes. Los puntos cercanos tratan de
         cosas parecidas y cada color es un tema. Pasa el ratón por un punto para
-        leer un extracto, haz clic para ver el fragmento entero; arrastra para
-        girar. Los botones de la esquina superior derecha permiten acercar,
-        mover o restablecer la vista.
+        leer un extracto, haz clic para ver el fragmento entero; haz clic en un
+        tema de la leyenda para ver sus fragmentos; arrastra para girar. Los
+        botones de la esquina superior derecha permiten acercar, mover o
+        restablecer la vista.
       </p>
       <Plot
         data={data}
         layout={layout}
+        onLegendClick={(event: { curveNumber: number }) => {
+          const topic = topics[event.curveNumber];
+          if (topic) onSelectTopic?.(topic.id);
+          // false: no ocultar la serie, el clic abre el panel del tema.
+          return false;
+        }}
         onClick={(event: { points?: { customdata?: unknown }[] }) => {
           const id = event.points?.[0]?.customdata;
           if (typeof id === "number") onSelect?.(id);
