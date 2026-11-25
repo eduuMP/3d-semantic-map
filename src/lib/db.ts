@@ -15,6 +15,8 @@ export type DocumentRecord = {
   size: number;
   pages: number;
   chunkCount: number;
+  /** Versión del troceado (`CHUNKER_VERSION`). Sin ella, el PDF se troceó por palabras. */
+  chunkerVersion?: number;
   createdAt: number;
 };
 

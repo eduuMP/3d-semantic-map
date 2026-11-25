@@ -5,6 +5,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Troceado por frases: en páginas largas el fragmento acaba en un final de frase y el solape son frases completas; una página que cabe en el tope (una diapositiva) es un único fragmento y las diapositivas cortas no se juntan (H1d)
+- `splitSentences`: no corta en abreviaturas («p. ej.», «Fig. 3», «pág. 12»), iniciales, decimales ni listas numeradas; con tests (H1d)
+- Aviso «Troceado antiguo» en la lista de documentos subidos antes de H1d, con `chunkerVersion` opcional en `DocumentRecord` (sin cambio de esquema Dexie) (H1d)
+- Error específico cuando Windows retira la GPU (`DEVICE_REMOVED`) con instrucciones para recuperarla (H3)
 - Temas con nombre: al generar el mapa, WebLLM en `llm.worker.ts` nombra cada tema a partir de 3-5 fragmentos cercanos al centroide, con salida JSON restringida por esquema y validada con zod; botón «Nombrar temas» para reintentar (H3)
 - Modelo elegido según el equipo: por defecto Qwen2.5-3B q4 (1.5B de respaldo, variantes f32 sin `shader-f16`); si la GPU se pierde a mitad de generación (TDR de Windows) se descarta el modelo y se baja al siguiente reintentando el tema (H3)
 - Leyenda clicable: un clic en un tema abre el panel lateral con sus fragmentos; el panel muestra el fragmento y el botón «Resumir» con resumen en streaming y «Parar» (H3)

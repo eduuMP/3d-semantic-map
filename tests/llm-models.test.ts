@@ -62,6 +62,13 @@ describe("isDeviceLostError", () => {
       ),
     ).toBe(true);
   });
+  it("reconoce DEVICE_REMOVED al pedir el dispositivo", () => {
+    expect(
+      isDeviceLostError(
+        "Failed to execute requestDevice: DXGI_ERROR_DEVICE_REMOVED (0x887A0005)",
+      ),
+    ).toBe(true);
+  });
   it("reconoce el motor ya descargado tras perder la GPU", () => {
     expect(
       isDeviceLostError(

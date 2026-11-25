@@ -67,40 +67,202 @@ export function normalizePageText(raw: string): string {
     .trim();
 }
 
+/** Versión del algoritmo de troceado: se guarda en cada documento (ver `DocumentRecord`). */
+export const CHUNKER_VERSION = 2;
+
+/** Abreviaturas (sin el punto final, en minúsculas) tras las que no acaba la frase. */
+const ABBREVIATIONS = new Set([
+  "p",
+  "pp",
+  "pág",
+  "págs",
+  "fig",
+  "figs",
+  "cap",
+  "caps",
+  "sec",
+  "secc",
+  "ej",
+  "eq",
+  "eqs",
+  "vol",
+  "núm",
+  "num",
+  "no",
+  "tel",
+  "dr",
+  "dra",
+  "sr",
+  "sra",
+  "srta",
+  "prof",
+  "ud",
+  "uds",
+  "vs",
+  "aprox",
+  "cf",
+  "ed",
+  "eds",
+  "apdo",
+  "art",
+  "arts",
+  "esp",
+  "etc",
+  "ca",
+  "máx",
+  "mín",
+  "min",
+  "máx",
+]);
+
+const OPENERS = /^["“«'(\[¿¡]*[\p{Lu}\d]/u;
+const CLOSERS = /["”»')\]]+$/;
+
+function endsSentence(
+  token: string,
+  next: string | undefined,
+  startsSentence: boolean,
+): boolean {
+  if (next === undefined) return false;
+  const bare = token.replace(CLOSERS, "");
+  const last = bare.at(-1);
+  if (!last || !".!?…".includes(last)) return false;
+  if (!OPENERS.test(next)) return false;
+  if (last !== ".") return true;
+  const word = bare.slice(0, -1).toLowerCase();
+  // «p.», «J.» (una letra), «3.» / «1.2.» (listas numeradas) y las abreviaturas.
+  if (/^\p{L}$/u.test(word)) return false;
+  // Un número con punto solo es de lista si abre la frase («1. Intro»), no en «pág. 12.».
+  if (startsSentence && /^[\d.]+$/.test(word)) return false;
+  // «p. ej.»: el último segmento tras un punto interno también cuenta.
+  const lastSegment = word.split(".").at(-1) ?? word;
+  if (ABBREVIATIONS.has(word) || ABBREVIATIONS.has(lastSegment)) {
+    // «etc.» con mayúscula detrás sí suele cerrar la frase.
+    return word === "etc";
+  }
+  return true;
+}
+
+/**
+ * Parte un texto ya normalizado (espacios simples) en frases. No corta en
+ * abreviaturas («p. ej.», «Fig. 3»), iniciales, listas numeradas («1. Intro»)
+ * ni decimales («3.5»). Un texto sin puntuación es una sola frase.
+ */
+export function splitSentences(text: string): string[] {
+  const tokens = text.split(" ").filter(Boolean);
+  const sentences: string[] = [];
+  let current: string[] = [];
+  tokens.forEach((token, i) => {
+    current.push(token);
+    if (endsSentence(token, tokens[i + 1], current.length === 1)) {
+      sentences.push(current.join(" "));
+      current = [];
+    }
+  });
+  if (current.length) sentences.push(current.join(" "));
+  return sentences;
+}
+
+type Resolved = Required<ChunkOptions>;
+
+/** Troceado por palabras con solape (texto sin frases reconocibles). */
+function chunkByWords(words: string[], o: Resolved): string[] {
+  const step = o.maxWords - o.overlapWords;
+  const out: string[] = [];
+  for (let start = 0; start < words.length; start += step) {
+    const end = start + o.maxWords;
+    const tail = words.length - end;
+    // Un resto diminuto (casi todo solape) se absorbe en este fragmento.
+    const absorbTail = tail > 0 && tail < o.minTailWords;
+    out.push(words.slice(start, absorbTail ? words.length : end).join(" "));
+    if (tail <= 0 || absorbTail) break;
+  }
+  return out;
+}
+
+/**
+ * Troceado por frases: se suman frases hasta el tope y se corta en el final de
+ * una. El solape son las últimas frases que caben en `overlapWords`. Una frase
+ * más larga que el tope se parte por palabras.
+ */
+function chunkBySentences(sentences: string[], o: Resolved): string[] {
+  const units: string[][] = [];
+  for (const sentence of sentences) {
+    const w = sentence.split(" ");
+    for (let i = 0; i < w.length; i += o.maxWords) {
+      units.push(w.slice(i, i + o.maxWords));
+    }
+  }
+
+  const out: string[] = [];
+  let i = 0;
+  while (i < units.length) {
+    let j = i;
+    let count = 0;
+    while (j < units.length && count + units[j].length <= o.maxWords) {
+      count += units[j].length;
+      j++;
+    }
+    const body = units.slice(i, j).flat();
+    const rest = units.slice(j).reduce((n, u) => n + u.length, 0);
+    if (rest === 0) {
+      out.push(body.join(" "));
+      break;
+    }
+    if (rest < o.minTailWords) {
+      out.push([...body, ...units.slice(j).flat()].join(" "));
+      break;
+    }
+    out.push(body.join(" "));
+    // Solape: retrocede mientras las últimas frases quepan en overlapWords.
+    let k = j;
+    let overlap = 0;
+    while (k - 1 > i && overlap + units[k - 1].length <= o.overlapWords) {
+      k--;
+      overlap += units[k].length;
+    }
+    i = k;
+  }
+  return out;
+}
+
 /**
  * Trocea el texto por página. Los fragmentos nunca cruzan páginas, así la
- * cita `[p. X]` siempre es exacta. `index` es el orden global del fragmento.
+ * cita `[p. X]` siempre es exacta, y una página que cabe en el tope (una
+ * diapositiva) es un único fragmento. En páginas largas se corta al final de
+ * una frase. `index` es el orden global del fragmento.
  */
 export function chunkPages(
   pages: PageText[],
   options: ChunkOptions = {},
 ): Chunk[] {
-  const { maxWords, overlapWords, minWords, minTailWords } = {
-    ...DEFAULT_CHUNK_OPTIONS,
-    ...options,
-  };
+  const resolved: Resolved = { ...DEFAULT_CHUNK_OPTIONS, ...options };
+  const { maxWords, overlapWords, minWords, minTailWords } = resolved;
   if (maxWords <= 0) throw new Error("maxWords debe ser mayor que 0");
   if (overlapWords < 0 || overlapWords >= maxWords) {
     throw new Error("overlapWords debe estar entre 0 y maxWords - 1");
   }
 
-  const step = maxWords - overlapWords;
   const chunks: Chunk[] = [];
-
   for (const { page, text } of pages) {
-    const words = normalizePageText(text).split(" ").filter(Boolean);
+    const normalized = normalizePageText(text);
+    const words = normalized.split(" ").filter(Boolean);
     if (words.length === 0 || words.length < minWords) continue;
 
-    for (let start = 0; start < words.length; start += step) {
-      const end = start + maxWords;
-      const tail = words.length - end;
-      // Un resto diminuto (casi todo solape) se absorbe en este fragmento.
-      const absorbTail = tail > 0 && tail < minTailWords;
-      const slice = words.slice(start, absorbTail ? words.length : end);
-      chunks.push({ page, index: chunks.length, text: slice.join(" ") });
-      if (tail <= 0 || absorbTail) break;
+    let pieces: string[];
+    if (words.length <= maxWords + minTailWords - 1) {
+      // Cabe (con el resto diminuto absorbido): un solo fragmento.
+      pieces = [words.join(" ")];
+    } else {
+      const sentences = splitSentences(normalized);
+      pieces =
+        sentences.length > 1
+          ? chunkBySentences(sentences, resolved)
+          : chunkByWords(words, resolved);
+    }
+    for (const piece of pieces) {
+      chunks.push({ page, index: chunks.length, text: piece });
     }
   }
-
   return chunks;
 }

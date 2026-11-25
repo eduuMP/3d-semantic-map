@@ -106,6 +106,10 @@ async function loadEngine(
         current = nextFallback(candidates, model);
       }
     }
+    // Si la GPU está retirada, ningún modelo puede cargar: se explica mejor.
+    if (isDeviceLostError(messageOf(lastError))) {
+      throw new LlmError("gpu-lost", messageOf(lastError));
+    }
     throw new LlmError("model", messageOf(lastError));
   })();
 

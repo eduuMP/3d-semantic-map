@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { CHUNKER_VERSION } from "@/lib/chunking";
 import { db, deleteDocumentCascade } from "@/lib/db";
 
 export function DocumentList({
@@ -72,6 +73,12 @@ export function DocumentList({
               <p className="text-sm opacity-70">
                 {doc.pages} páginas · {doc.chunkCount} fragmentos
               </p>
+              {(doc.chunkerVersion ?? 1) < CHUNKER_VERSION && (
+                <p className="text-xs opacity-70">
+                  Troceado antiguo: puede cortar a mitad de frase. Quítalo y
+                  vuelve a subirlo para cortar por frases.
+                </p>
+              )}
             </div>
             {confirmingId === doc.id ? (
               <div className="flex shrink-0 items-center gap-2 text-sm">

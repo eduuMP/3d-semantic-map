@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { chunkPages, type PageText } from "../lib/chunking";
+import { CHUNKER_VERSION, chunkPages, type PageText } from "../lib/chunking";
 import { db } from "../lib/db";
 import type {
   IngestErrorCode,
@@ -96,6 +96,7 @@ async function ingest(file: File, subjectId: number) {
         size: file.size,
         pages: pages.length,
         chunkCount: chunks.length,
+        chunkerVersion: CHUNKER_VERSION,
         createdAt: Date.now(),
       });
       await db.chunks.bulkAdd(

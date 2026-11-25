@@ -94,7 +94,7 @@ export function nextFallback(
  * siguiente.
  */
 export function isDeviceLostError(message: string): boolean {
-  return /device (was )?lost|device_hung|device removed|already been disposed|deleted object|model not loaded|out of memory/i.test(
+  return /device[ _](was )?(lost|hung|removed)|already been disposed|deleted object|model not loaded|out of memory/i.test(
     message,
   );
 }

@@ -1,5 +1,5 @@
 export type LlmErrorCode =
-  "no-webgpu" | "model" | "generation" | "no-subject" | "unknown";
+  "no-webgpu" | "gpu-lost" | "model" | "generation" | "no-subject" | "unknown";
 
 /** UI → worker */
 export type LlmRequest =
@@ -34,6 +34,8 @@ export type LlmMessage =
 export const LLM_ERROR_MESSAGES: Record<LlmErrorCode, string> = {
   "no-webgpu":
     "Tu navegador no ofrece WebGPU. Usa Chrome o Edge recientes en un equipo con GPU.",
+  "gpu-lost":
+    "Windows reinició la GPU (tardó demasiado en una operación) y Chrome no puede volver a usarla. Cierra Chrome por completo, pulsa Win + Ctrl + Shift + B para reiniciar el controlador gráfico y vuelve a intentarlo.",
   model:
     "No se pudo cargar ningún modelo de lenguaje. Comprueba tu conexión (solo hace falta la primera vez), cierra otras pestañas pesadas y vuelve a intentarlo.",
   generation:
