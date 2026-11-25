@@ -19,10 +19,50 @@ export const DEFAULT_CHUNK_OPTIONS = {
   minTailWords: 15,
 } as const satisfies Required<ChunkOptions>;
 
-/** Une palabras cortadas con guion a final de línea y colapsa espacios. */
+/** Acento suelto (como lo extrae pdfjs de PDFs LaTeX) → marca combinante. */
+const LOOSE_ACCENTS: Record<string, string> = {
+  "´": "\u0301", // acento agudo
+  "¨": "\u0308", // diéresis
+};
+
+function compose(_match: string, accent: string, letter: string): string {
+  return ((letter === "ı" ? "i" : letter) + LOOSE_ACCENTS[accent]).normalize(
+    "NFC",
+  );
+}
+
+/**
+ * Los PDFs hechos con LaTeX dibujan la tilde como un símbolo suelto antes de la
+ * vocal, y pdfjs lo extrae así: «Matem´ aticas», «m´ ın», «Espa˜ na». Se
+ * recomponen en «Matemáticas», «mín», «España». No toca ` ni ~ ni ^, que en
+ * apuntes suelen ser código o matemáticas.
+ */
+export function fixLooseAccents(text: string): string {
+  return (
+    text
+      // Solo las vocales que de verdad llevan cada acento en español: así un
+      // apóstrofo o una comilla (don´t, ´hola´) no se pega a la letra siguiente.
+      .replace(/([´])\s?([aeiouAEIOUı])/g, compose)
+      .replace(/([¨])\s?([uUiI])/g, compose)
+      .replace(/˜\s?([nN])/g, (_, letter: string) =>
+        (letter + "\u0303").normalize("NFC"),
+      )
+  );
+}
+
+/** Caracteres de control (salvo tab y saltos de línea) y de uso privado. */
+const JUNK_CHARS =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uE000-\uF8FF]/g;
+
+/**
+ * Limpia el texto extraído de una página: une palabras cortadas con guion a
+ * final de línea, recompone tildes sueltas, quita caracteres de control y de
+ * uso privado (restos de símbolos matemáticos) y colapsa espacios.
+ */
 export function normalizePageText(raw: string): string {
-  return raw
-    .replace(/([\p{L}])-\s*\n\s*([\p{Ll}])/gu, "$1$2")
+  const joined = raw.replace(/([\p{L}])-\s*\n\s*([\p{Ll}])/gu, "$1$2");
+  return fixLooseAccents(joined)
+    .replace(JUNK_CHARS, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

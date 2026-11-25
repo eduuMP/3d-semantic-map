@@ -27,6 +27,59 @@ describe("normalizePageText", () => {
   });
 });
 
+describe("fixLooseAccents / normalizePageText con PDFs LaTeX", () => {
+  it("recompone la tilde suelta antes de la vocal", () => {
+    expect(normalizePageText("Grado en Matem´ aticas")).toBe(
+      "Grado en Matemáticas",
+    );
+    expect(normalizePageText("Matem´aticas")).toBe("Matemáticas");
+  });
+
+  it("recompone la i sin punto con acento", () => {
+    expect(normalizePageText("el m´ ın( n, m ) + 2")).toBe(
+      "el mín( n, m ) + 2",
+    );
+  });
+
+  it("recompone la ñ y la diéresis", () => {
+    expect(normalizePageText("Espa˜ na y ping¨ uino")).toBe(
+      "España y pingüino",
+    );
+    expect(normalizePageText("Espa˜na")).toBe("España");
+  });
+
+  it("recompone mayúsculas", () => {
+    expect(normalizePageText("´ Algebra e ´ Indice")).toBe("Álgebra e Índice");
+  });
+
+  it("no toca ~, ^ ni comillas invertidas (código y matemáticas)", () => {
+    const text = "nivel ~1000 y x^2 con `for` y a~b";
+    expect(normalizePageText(text)).toBe(text);
+  });
+
+  it("no pega apóstrofos ni comillas a la letra siguiente", () => {
+    expect(normalizePageText("don´t")).toBe("don´t");
+    expect(normalizePageText("dijo ´hola´ y")).toBe("dijo ´hola´ y");
+    expect(normalizePageText("el ´ gato")).toBe("el ´ gato");
+  });
+
+  it("un acento que no va seguido de letra se deja como está", () => {
+    expect(normalizePageText("f´ (x) = 2")).toBe("f´ (x) = 2");
+  });
+
+  it("no cambia el texto que ya tiene tildes bien", () => {
+    expect(normalizePageText("Representación del Conocimiento")).toBe(
+      "Representación del Conocimiento",
+    );
+  });
+
+  it("quita caracteres de control y de uso privado", () => {
+    expect(normalizePageText("f ( n ) = \u001a 0 si \ue001 x")).toBe(
+      "f ( n ) = 0 si x",
+    );
+  });
+});
+
 describe("chunkPages", () => {
   it("devuelve [] sin páginas", () => {
     expect(chunkPages([])).toEqual([]);
