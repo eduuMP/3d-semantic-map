@@ -62,11 +62,17 @@ type QueueEntry = { key: number; file: File };
 
 type PdfUploadProps = {
   subjectId: number;
+  /** Desactiva la subida (p. ej. mientras se calcula el mapa). */
+  disabled?: boolean;
   /** Avisa al padre de si hay una subida en curso (para bloquear el cambio de asignatura). */
   onBusyChange?: (busy: boolean) => void;
 };
 
-export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
+export function PdfUpload({
+  subjectId,
+  disabled = false,
+  onBusyChange,
+}: PdfUploadProps) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +222,12 @@ export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
     async (list: FileList | File[] | null | undefined) => {
       const files = Array.from(list ?? []);
       if (files.length === 0) return;
+      if (disabled) {
+        setError(
+          "Espera a que termine el cálculo del mapa para subir más PDFs.",
+        );
+        return;
+      }
       if (busyRef.current) {
         setError("Espera a que termine la subida actual para añadir más PDFs.");
         return;
@@ -263,7 +275,7 @@ export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
         changeBusy(false);
       }
     },
-    [runQueue, changeBusy, subjectId],
+    [runQueue, changeBusy, subjectId, disabled],
   );
 
   const total = items.filter((i) => i.status !== "duplicate").length;
@@ -282,7 +294,7 @@ export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
       <div
         onDragOver={(e) => {
           e.preventDefault();
-          setDragging(!busy);
+          setDragging(!busy && !disabled);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -302,7 +314,7 @@ export function PdfUpload({ subjectId, onBusyChange }: PdfUploadProps) {
         <p className="text-sm opacity-70">puedes subir varios a la vez</p>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || disabled}
           onClick={() => inputRef.current?.click()}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >

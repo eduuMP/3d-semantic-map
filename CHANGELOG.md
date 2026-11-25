@@ -5,6 +5,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Mapa 3D por asignatura: botón «Generar mapa» que calcula embeddings (`multilingual-e5-small` en WebGPU, fp16 con respaldo fp32) en `map.worker.ts`, UMAP 3D y k-means (k ≈ √(n/2), entre 3 y 12), con barra de descarga del modelo y progreso por fase (H2)
+- Visor Plotly `scatter3d` coloreado por tema con leyenda y recuento; el tooltip muestra tema, documento, página y extracto (HTML escapado) (H2)
+- Clic en un punto abre el fragmento entero (tema, documento, página y texto) en un panel centrado (H2)
+- «Actualizar mapa» solo calcula los fragmentos nuevos y «Recalcular mapa» reutiliza los vectores guardados sin descargar el modelo (H2)
+- Lógica pura con tests: `chooseK`, `chooseNeighbors`, `normalizeCoords` robusto (percentil 70), `clusterPoints`, `layout3d`, `isValidEmbedding`, `sameIdSet`, `hoverText`, `isMapStale` y `aggregateDownloadProgress` (H2)
+- Dependencias: `@huggingface/transformers`, `umap-js`, `ml-kmeans`, `react-plotly.js`, `plotly.js-dist-min` y, de desarrollo, `fake-indexeddb` (H2, H1c)
 - Asignaturas: selector, crear, renombrar y borrar (con confirmación y recuento de PDFs); cada PDF pertenece a una asignatura y la activa se recuerda entre recargas (H1c)
 - Esquema Dexie v2 (`subjects`, `subjectId` en `documents`, `chunks` y `topics`) con migración que deja lo ya subido en «Mis apuntes» y test con `fake-indexeddb` (H1c)
 - `validateSubjectName` y `resolveActiveSubject` con tests; `deleteSubjectCascade` (H1c)
@@ -23,9 +29,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 - `prettier` como devDependency (lo usa el hook de formato) (H0)
 
 ### Changed
+- Al quitar un PDF, el mapa de su asignatura queda desactualizado (se borran `xyz` y `topicId` del resto; los vectores se conservan) (H2)
+- Mientras se calcula el mapa no se puede subir ni quitar PDFs, y el worker aborta si los fragmentos cambiaron durante el cálculo (H2)
+- La rueda del ratón recorre la página en vez de hacer zoom sobre el mapa (H2)
+- ADR: `map.worker.ts` separado de `ingest.worker.ts` y esquema con `subjects` (H2, H1c)
 - Los duplicados se comprueban dentro de cada asignatura: el mismo PDF puede estar en dos (H1c)
 - `deleteDocumentCascade` borra también las tarjetas de sus fragmentos (H1c)
 - Los controles nativos (selector) siguen el tema claro/oscuro del navegador (H1c)
 - Subir un PDF ya no sustituye a los anteriores: se acumulan (H1b)
 - `@types/node` a ^24 (requerido por vitest 5, igual que Node 24 de CI) (H0)
 - `README.md` y `CHANGELOG.md` dejan de estar en `.gitignore` y se versionan (H0)
+
+### Fixed
+- Tildes rotas en PDFs hechos con LaTeX (`Matem´ aticas`, `m´ ın`, `Espa˜ na`): se recomponen al normalizar el texto de cada página; también se quitan caracteres de control y de uso privado. Hay que volver a subir los PDFs ya cargados (H1)

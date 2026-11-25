@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { resolveActiveSubject } from "@/lib/subjects";
 import { useStoredSubjectId } from "@/lib/use-active-subject";
 import { DocumentList } from "./document-list";
+import { MapPanel } from "./map-panel";
 import { PdfUpload } from "./pdf-upload";
 import { SubjectPicker } from "./subject-picker";
 
@@ -23,7 +24,8 @@ export function Library() {
     [],
   );
   const [storedId, setStoredId] = useStoredSubjectId();
-  const [uploading, setUploading] = useState(false);
+  const [busyKinds, setBusyKinds] = useState({ upload: false, map: false });
+  const busy = busyKinds.upload || busyKinds.map;
   // Asignatura congelada mientras se sube un PDF: un cambio externo (otra
   // pestaña, crear una nueva) no debe desmontar la subida en curso.
   const [lockedId, setLockedId] = useState<number | null>(null);
@@ -39,11 +41,14 @@ export function Library() {
   if (!subjects) return null;
 
   const resolvedId = resolveActiveSubject(subjects, storedId);
-  const activeId = uploading && lockedId !== null ? lockedId : resolvedId;
+  const activeId = busy && lockedId !== null ? lockedId : resolvedId;
 
-  const handleBusyChange = (busy: boolean) => {
-    setUploading(busy);
-    setLockedId(busy ? resolvedId : null);
+  const handleBusyChange = (kind: "upload" | "map") => (value: boolean) => {
+    const next = { ...busyKinds, [kind]: value };
+    const nextBusy = next.upload || next.map;
+    setBusyKinds(next);
+    if (!busy && nextBusy) setLockedId(resolvedId);
+    if (busy && !nextBusy) setLockedId(null);
   };
 
   return (
@@ -52,16 +57,23 @@ export function Library() {
         subjects={subjects}
         activeId={activeId}
         onSelect={setStoredId}
-        disabled={uploading}
+        disabled={busy}
       />
       {activeId !== null && (
         <>
           <PdfUpload
             key={activeId}
             subjectId={activeId}
-            onBusyChange={handleBusyChange}
+            disabled={busyKinds.map}
+            onBusyChange={handleBusyChange("upload")}
           />
-          <DocumentList subjectId={activeId} />
+          <DocumentList subjectId={activeId} locked={busyKinds.map} />
+          <MapPanel
+            key={`map-${activeId}`}
+            subjectId={activeId}
+            disabled={busyKinds.upload}
+            onBusyChange={handleBusyChange("map")}
+          />
         </>
       )}
     </div>
