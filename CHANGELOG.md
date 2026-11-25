@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Temas con nombre: al generar el mapa, WebLLM en `llm.worker.ts` nombra cada tema a partir de 3-5 fragmentos cercanos al centroide, con salida JSON restringida por esquema y validada con zod; botón «Nombrar temas» para reintentar (H3)
+- Modelo elegido según el equipo: por defecto Qwen2.5-3B q4 (1.5B de respaldo, variantes f32 sin `shader-f16`); si la GPU se pierde a mitad de generación (TDR de Windows) se descarta el modelo y se baja al siguiente reintentando el tema (H3)
+- Leyenda clicable: un clic en un tema abre el panel lateral con sus fragmentos; el panel muestra el fragmento y el botón «Resumir» con resumen en streaming y «Parar» (H3)
+- Lógica pura con tests: `pickCandidates`, `nextFallback`, `isDeviceLostError`, `pickRepresentatives`, `parseTopicName`, `dedupeNames` y el esquema zod de `{nombre}` (H3)
+- Dependencias: `@mlc-ai/web-llm` y `zod` (H3)
 - Mapa 3D por asignatura: botón «Generar mapa» que calcula embeddings (`multilingual-e5-small` en WebGPU, fp16 con respaldo fp32) en `map.worker.ts`, UMAP 3D y k-means (k ≈ √(n/2), entre 3 y 12), con barra de descarga del modelo y progreso por fase (H2)
 - Visor Plotly `scatter3d` coloreado por tema con leyenda y recuento; el tooltip muestra tema, documento, página y extracto (HTML escapado) (H2)
 - Clic en un punto abre el fragmento entero (tema, documento, página y texto) en un panel centrado (H2)
@@ -29,6 +34,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 - `prettier` como devDependency (lo usa el hook de formato) (H0)
 
 ### Changed
+- El fragmento abierto se muestra en un panel lateral fijo en vez de bajo el mapa; «Generar mapa» ya no deja nombres «Tema N» sin resolver (H3)
+- El clic en la leyenda abre el tema en vez de ocultar su serie (H3)
 - Al quitar un PDF, el mapa de su asignatura queda desactualizado (se borran `xyz` y `topicId` del resto; los vectores se conservan) (H2)
 - Mientras se calcula el mapa no se puede subir ni quitar PDFs, y el worker aborta si los fragmentos cambiaron durante el cálculo (H2)
 - La rueda del ratón recorre la página en vez de hacer zoom sobre el mapa (H2)

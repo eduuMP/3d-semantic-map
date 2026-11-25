@@ -15,7 +15,8 @@ import {
   type MapPhase,
 } from "@/lib/map-protocol";
 import { hasMap, hoverText, isMapStale } from "@/lib/map-view";
-import { ChunkDetail } from "./chunk-detail";
+import { useLlm } from "@/lib/use-llm";
+import { SidePanel } from "./side-panel";
 import { Map3D, type MapPoint, type MapTopic } from "./map-3d";
 
 type Progress = {
@@ -61,6 +62,7 @@ export function MapPanel({
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedTopicId, setSelectedTopicId] = useState<number | null>(null);
   // Sube al terminar un cálculo para volver a leer los datos ya definitivos.
   const [dataVersion, setDataVersion] = useState(0);
   const workerRef = useRef<Worker | null>(null);
@@ -90,6 +92,8 @@ export function MapPanel({
     [subjectId, dataVersion],
     undefined,
   );
+  const llm = useLlm();
+  const llmBusy = llm.loading !== null || llm.labeling !== null;
   const onBusyRef = useRef(onBusyChange);
   useEffect(() => {
     onBusyRef.current = onBusyChange;
@@ -106,7 +110,7 @@ export function MapPanel({
     [],
   );
 
-  const { points, topics, mapped, stale, chunkCount } = useMemo(() => {
+  const { points, topics, mapped, stale, chunkCount, unnamed } = useMemo(() => {
     if (!data) {
       return {
         points: [] as MapPoint[],
@@ -114,6 +118,7 @@ export function MapPanel({
         mapped: false,
         stale: false,
         chunkCount: 0,
+        unnamed: false,
       };
     }
     const names = new Map(data.documents.map((d) => [d.id, d.name]));
@@ -144,6 +149,8 @@ export function MapPanel({
       mapped: hasMap(data.chunks),
       stale: isMapStale(data.chunks),
       chunkCount: data.chunks.length,
+      // Los temas recién creados se llaman «Tema N» hasta que el LLM los nombra.
+      unnamed: data.topics.some((t) => !t.name || /^Tema \d+$/.test(t.name)),
     };
   }, [data]);
 
@@ -161,6 +168,24 @@ export function MapPanel({
       topicName: topic ? (topic.name ?? `Tema ${topic.id}`) : null,
     };
   }, [data, selectedId]);
+
+  // Tema elegido en la leyenda (null si ya no existe, p. ej. tras recalcular).
+  const selectedTopic = useMemo(() => {
+    if (!data || selectedTopicId === null) return null;
+    const topic = data.topics.find((t) => t.id === selectedTopicId);
+    if (!topic) return null;
+    const names = new Map(data.documents.map((d) => [d.id, d.name]));
+    return {
+      name: topic.name ?? `Tema ${topic.id}`,
+      fragments: data.chunks
+        .filter((c) => c.topicId === topic.id)
+        .map((c) => ({
+          chunkId: c.id,
+          page: c.page,
+          documentName: names.get(c.documentId) ?? "",
+        })),
+    };
+  }, [data, selectedTopicId]);
 
   // Si todos los fragmentos ya tienen vector, calcular el mapa no descarga el modelo.
   const allEmbedded = data ? data.chunks.every((c) => c.vector) : false;
@@ -204,6 +229,8 @@ export function MapPanel({
             `${message.truncated ?? "?"} superan los 512 tokens del modelo`,
         );
         finish();
+        // Tras generar el mapa, el propio LLM pone nombre a los temas.
+        llm.labelTopics(subjectId);
       } else if (message.type === "error") {
         console.error(`[map] ${message.code}: ${message.message}`);
         finish();
@@ -218,7 +245,7 @@ export function MapPanel({
     };
 
     worker.postMessage({ type: "build", subjectId });
-  }, [subjectId]);
+  }, [subjectId, llm]);
 
   if (data === null) {
     return (
@@ -236,7 +263,7 @@ export function MapPanel({
         <div className="flex flex-col items-start gap-2">
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || llmBusy}
             onClick={build}
             className={
               !mapped || stale
@@ -260,6 +287,57 @@ export function MapPanel({
             </p>
           )}
         </div>
+      )}
+
+      {!building && mapped && !llmBusy && unnamed && (
+        <button
+          type="button"
+          onClick={() => llm.labelTopics(subjectId)}
+          className="self-start rounded-lg border border-current/30 px-3 py-1.5 text-sm"
+        >
+          Nombrar temas
+        </button>
+      )}
+
+      {llm.loading && (
+        <div role="status" className="flex flex-col gap-2">
+          <div className="flex justify-between gap-3 text-sm">
+            <span>
+              Preparando el modelo de lenguaje (solo la primera vez se
+              descarga)…
+            </span>
+            <span>{llm.loading.percent} %</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Carga del modelo de lenguaje"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={llm.loading.percent}
+            className="h-2 overflow-hidden rounded-full bg-current/15"
+          >
+            <div
+              className="h-full bg-blue-600 transition-[width]"
+              style={{ width: `${llm.loading.percent}%` }}
+            />
+          </div>
+          <p className="text-xs opacity-70">{llm.loading.model}</p>
+        </div>
+      )}
+
+      {!llm.loading && llm.labeling && (
+        <p role="status" className="text-sm">
+          Poniendo nombre a los temas
+          {llm.labeling.total > 0
+            ? `: ${Math.min(llm.labeling.current + 1, llm.labeling.total)} de ${llm.labeling.total}`
+            : "…"}
+        </p>
+      )}
+
+      {llm.error && (
+        <p role="alert" className="rounded-lg bg-red-500/15 p-3 text-sm">
+          {llm.error}
+        </p>
       )}
 
       {progress && (
@@ -291,16 +369,41 @@ export function MapPanel({
       )}
 
       {points.length > 0 && (
-        <Map3D points={points} topics={topics} onSelect={setSelectedId} />
+        <Map3D
+          points={points}
+          topics={topics}
+          onSelect={(id) => {
+            llm.clearSummary();
+            setSelectedId(id);
+          }}
+          onSelectTopic={(id) => {
+            llm.clearSummary();
+            setSelectedId(null);
+            setSelectedTopicId(id);
+          }}
+        />
       )}
 
-      {selectedChunk && (
-        <ChunkDetail
-          text={selectedChunk.text}
-          page={selectedChunk.page}
-          documentName={selectedChunk.documentName}
-          topicName={selectedChunk.topicName}
-          onClose={() => setSelectedId(null)}
+      {(selectedChunk || selectedTopic) && (
+        <SidePanel
+          topic={selectedTopic}
+          chunk={selectedChunk}
+          summary={llm.summary}
+          llmBusy={llmBusy}
+          onSummarize={() =>
+            selectedChunk &&
+            llm.summarize(selectedChunk.text, selectedChunk.page)
+          }
+          onStop={llm.cancel}
+          onOpenChunk={(id) => {
+            llm.clearSummary();
+            setSelectedId(id);
+          }}
+          onClose={() => {
+            llm.clearSummary();
+            setSelectedId(null);
+            setSelectedTopicId(null);
+          }}
         />
       )}
     </section>
