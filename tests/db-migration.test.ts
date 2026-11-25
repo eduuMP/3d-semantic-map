@@ -197,3 +197,52 @@ describe("borrado en cascada", () => {
     expect(await database.topics.count()).toBe(2);
   });
 });
+
+describe("mapa desactualizado al quitar un PDF", () => {
+  it("borra xyz y topicId del resto de la asignatura y conserva los vectores", async () => {
+    const database = track(new AppDb(freshName()));
+    const subjectId = (await database.subjects.toCollection().first())!.id;
+    const other = (await database.subjects.add({
+      name: "Otra",
+      createdAt: 1,
+    })) as number;
+
+    const addDoc = async (sid: number, name: string) => {
+      const documentId = (await database.documents.add({
+        subjectId: sid,
+        name,
+        size: 1,
+        pages: 1,
+        chunkCount: 1,
+        createdAt: 1,
+      })) as number;
+      await database.chunks.add({
+        documentId,
+        subjectId: sid,
+        index: 0,
+        page: 1,
+        text: name,
+        vector: new Float32Array([1, 2]),
+        xyz: [0, 0, 0],
+        topicId: 7,
+      });
+      return documentId;
+    };
+    const a = await addDoc(subjectId, "a.pdf");
+    await addDoc(subjectId, "b.pdf");
+    await addDoc(other, "c.pdf");
+
+    await deleteDocumentCascade(a, database);
+
+    const remaining = await database.chunks.toArray();
+    const b = remaining.find((c) => c.text === "b.pdf")!;
+    expect(b.xyz).toBeUndefined();
+    expect(b.topicId).toBeUndefined();
+    expect(Array.from(b.vector!)).toEqual([1, 2]);
+
+    // Otra asignatura: su mapa no se toca.
+    const c = remaining.find((x) => x.text === "c.pdf")!;
+    expect(c.xyz).toEqual([0, 0, 0]);
+    expect(c.topicId).toBe(7);
+  });
+});

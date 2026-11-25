@@ -4,7 +4,14 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, deleteDocumentCascade } from "@/lib/db";
 
-export function DocumentList({ subjectId }: { subjectId: number }) {
+export function DocumentList({
+  subjectId,
+  locked = false,
+}: {
+  subjectId: number;
+  /** Bloquea el borrado (p. ej. mientras se calcula el mapa). */
+  locked?: boolean;
+}) {
   // `undefined` = cargando, `null` = error al leer IndexedDB.
   const documents = useLiveQuery(
     () =>
@@ -72,8 +79,9 @@ export function DocumentList({ subjectId }: { subjectId: number }) {
                 <button
                   type="button"
                   onClick={() => remove(doc.id)}
+                  disabled={locked}
                   aria-label={`Sí, quitar ${doc.name}`}
-                  className="rounded bg-red-600 px-2 py-1 text-white"
+                  className="rounded bg-red-600 px-2 py-1 text-white disabled:opacity-50"
                 >
                   Sí, quitar
                 </button>
@@ -90,8 +98,9 @@ export function DocumentList({ subjectId }: { subjectId: number }) {
               <button
                 type="button"
                 onClick={() => setConfirmingId(doc.id)}
+                disabled={locked}
                 aria-label={`Quitar ${doc.name}`}
-                className="shrink-0 rounded border border-current/30 px-2 py-1 text-sm"
+                className="shrink-0 rounded border border-current/30 px-2 py-1 text-sm disabled:opacity-50"
               >
                 Quitar
               </button>

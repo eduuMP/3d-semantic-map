@@ -104,7 +104,11 @@ export class AppDb extends Dexie {
 
 export const db = new AppDb();
 
-/** Borra un documento con sus fragmentos y las tarjetas generadas desde ellos. */
+/**
+ * Borra un documento con sus fragmentos y las tarjetas generadas desde ellos.
+ * El mapa de su asignatura queda desactualizado: se borran las coordenadas y
+ * el tema del resto de fragmentos (los vectores se conservan).
+ */
 export async function deleteDocumentCascade(
   documentId: number,
   database: AppDb = db,
@@ -113,6 +117,7 @@ export async function deleteDocumentCascade(
     "rw",
     [database.documents, database.chunks, database.cards],
     async () => {
+      const document = await database.documents.get(documentId);
       const chunkIds = await database.chunks
         .where("documentId")
         .equals(documentId)
@@ -120,6 +125,15 @@ export async function deleteDocumentCascade(
       await database.cards.where("chunkId").anyOf(chunkIds).delete();
       await database.chunks.where("documentId").equals(documentId).delete();
       await database.documents.delete(documentId);
+      if (document) {
+        await database.chunks
+          .where("subjectId")
+          .equals(document.subjectId)
+          .modify((chunk) => {
+            delete chunk.xyz;
+            delete chunk.topicId;
+          });
+      }
     },
   );
 }
