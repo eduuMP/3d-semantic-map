@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkPages, normalizePageText } from "@/lib/chunking";
+import { chunkPages, normalizePageText, splitSentences } from "@/lib/chunking";
 
 const words = (n: number, prefix = "w") =>
   Array.from({ length: n }, (_, i) => `${prefix}${i}`).join(" ");
@@ -176,5 +176,142 @@ describe("chunkPages", () => {
         overlapWords: 10,
       }),
     ).toThrow();
+  });
+});
+
+/** Una frase de `n` palabras que acaba en punto. */
+const sentence = (n: number, tag: string) =>
+  `${tag}0 ${Array.from({ length: n - 1 }, (_, i) => `${tag}${i + 1}`).join(" ")}.`;
+
+describe("splitSentences", () => {
+  it("corta tras . ! ? … cuando sigue mayúscula, dígito, ¿ o ¡", () => {
+    expect(
+      splitSentences("Hola mundo. Otra frase! ¿Y esta? Sí… Fin 2. ¡Ya!"),
+    ).toEqual([
+      "Hola mundo.",
+      "Otra frase!",
+      "¿Y esta?",
+      "Sí…",
+      "Fin 2.",
+      "¡Ya!",
+    ]);
+  });
+  it("no corta si lo siguiente es minúscula", () => {
+    expect(splitSentences("el valor es 3. luego sigue")).toEqual([
+      "el valor es 3. luego sigue",
+    ]);
+  });
+  it("no corta en abreviaturas ni en «p. ej.»", () => {
+    expect(
+      splitSentences(
+        "Ver la Fig. 3 y la pág. 12. Por ejemplo, p. ej. Madrid. Fin.",
+      ),
+    ).toEqual([
+      "Ver la Fig. 3 y la pág. 12.",
+      "Por ejemplo, p. ej. Madrid.",
+      "Fin.",
+    ]);
+  });
+  it("no corta en decimales, iniciales ni listas numeradas", () => {
+    expect(
+      splitSentences(
+        "Vale 3.5 en total. Según J. Smith es así. 1. Introducción",
+      ),
+    ).toEqual([
+      "Vale 3.5 en total.",
+      "Según J. Smith es así.",
+      "1. Introducción",
+    ]);
+  });
+  it("«etc.» seguido de mayúscula cierra la frase", () => {
+    expect(
+      splitSentences("Hay peras, manzanas, etc. Después vienen más."),
+    ).toEqual(["Hay peras, manzanas, etc.", "Después vienen más."]);
+  });
+  it("tolera comillas y paréntesis de cierre", () => {
+    expect(splitSentences("Dijo «hola.» Luego se fue (sin más.) Fin.")).toEqual(
+      ["Dijo «hola.»", "Luego se fue (sin más.)", "Fin."],
+    );
+  });
+  it("texto sin puntuación es una sola frase; vacío da []", () => {
+    expect(splitSentences(words(5))).toEqual([words(5)]);
+    expect(splitSentences("")).toEqual([]);
+  });
+});
+
+describe("chunkPages por frases", () => {
+  const opts = { maxWords: 40, overlapWords: 10, minTailWords: 5 };
+  // 10 frases de 12 palabras = 120 palabras.
+  const longText = Array.from({ length: 10 }, (_, i) =>
+    sentence(12, `S${i}_`),
+  ).join(" ");
+
+  it("cada fragmento de una página larga acaba en final de frase", () => {
+    const out = chunkPages([{ page: 1, text: longText }], opts);
+    expect(out.length).toBeGreaterThan(1);
+    for (const c of out) expect(c.text.endsWith(".")).toBe(true);
+  });
+  it("respeta el tope de palabras (salvo el resto absorbido)", () => {
+    const out = chunkPages([{ page: 1, text: longText }], opts);
+    for (const c of out.slice(0, -1)) {
+      expect(c.text.split(" ").length).toBeLessThanOrEqual(40);
+    }
+  });
+  it("el solape son frases completas y no pasa de overlapWords", () => {
+    const out = chunkPages([{ page: 1, text: longText }], {
+      ...opts,
+      overlapWords: 14,
+    });
+    const first = splitSentences(out[0].text);
+    const second = splitSentences(out[1].text);
+    const shared = second.filter((x) => first.includes(x));
+    expect(shared.length).toBeGreaterThan(0);
+    expect(shared.join(" ").split(" ").length).toBeLessThanOrEqual(14);
+    expect(second.slice(0, shared.length)).toEqual(shared);
+  });
+  it("no pierde ninguna palabra", () => {
+    const out = chunkPages([{ page: 1, text: longText }], opts);
+    const seen = new Set(out.flatMap((c) => c.text.split(" ")));
+    for (const w of longText.split(" ")) expect(seen.has(w)).toBe(true);
+  });
+  it("una frase más larga que el tope se parte por palabras", () => {
+    const text = `${sentence(5, "A")} ${sentence(100, "G")} ${sentence(5, "Z")}`;
+    const out = chunkPages([{ page: 1, text }], opts);
+    for (const c of out)
+      expect(c.text.split(" ").length).toBeLessThanOrEqual(45);
+    const seen = new Set(out.flatMap((c) => c.text.split(" ")));
+    for (const w of text.split(" ")) expect(seen.has(w)).toBe(true);
+  });
+  it("una diapositiva que cabe en el tope es un único fragmento aunque tenga varias frases", () => {
+    const text = `${sentence(8, "A")} ${sentence(8, "B")} ${sentence(8, "C")}`;
+    const out = chunkPages([{ page: 3, text }], opts);
+    expect(out).toHaveLength(1);
+    expect(out[0].page).toBe(3);
+  });
+  it("las diapositivas cortas no se juntan entre sí", () => {
+    const pages = [1, 2, 3].map((page) => ({
+      page,
+      text: sentence(6, `P${page}_`),
+    }));
+    const out = chunkPages(pages, opts);
+    expect(out.map((c) => c.page)).toEqual([1, 2, 3]);
+  });
+  it("numera de forma global y no cruza páginas", () => {
+    const out = chunkPages(
+      [
+        { page: 1, text: longText },
+        { page: 2, text: longText.replaceAll("S", "T") },
+      ],
+      opts,
+    );
+    expect(out.map((c) => c.index)).toEqual(out.map((_, i) => i));
+    for (const c of out) {
+      expect(c.text.startsWith(c.page === 1 ? "S" : "T")).toBe(true);
+    }
+  });
+  it("un texto largo sin frases sigue usando el solape por palabras", () => {
+    const out = chunkPages([{ page: 1, text: words(100) }], opts);
+    const first = out[0].text.split(" ");
+    expect(out[1].text.split(" ").slice(0, 10)).toEqual(first.slice(-10));
   });
 });
