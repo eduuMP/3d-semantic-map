@@ -21,6 +21,8 @@ type SidePanelProps = {
   /** El LLM está cargando o nombrando temas: el botón espera. */
   llmBusy: boolean;
   onSummarize: () => void;
+  /** Volver del fragmento a la lista del tema (solo si se llegó desde un tema). */
+  onBack: () => void;
   onStop: () => void;
   onOpenChunk: (chunkId: number) => void;
   onClose: () => void;
@@ -33,6 +35,7 @@ export function SidePanel({
   summary,
   llmBusy,
   onSummarize,
+  onBack,
   onStop,
   onOpenChunk,
   onClose,
@@ -66,6 +69,15 @@ export function SidePanel({
 
       {chunk ? (
         <>
+          {topic && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="self-start text-sm underline"
+            >
+              ‹ Volver al tema
+            </button>
+          )}
           <p className="text-sm font-medium break-words">
             {chunk.documentName} · p. {chunk.page}
           </p>

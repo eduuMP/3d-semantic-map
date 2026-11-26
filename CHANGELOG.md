@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Preguntar a un tema: pestaña de preguntas en el panel lateral; la pregunta se embebe en el navegador, se recuperan los 4 fragmentos más parecidos (coseno) dentro del tema y el LLM responde en streaming citando `[p. X]`; si los fragmentos no la contienen responde «No aparece en tus apuntes.» (H4)
+- Lógica pura con tests en `retrieval.ts`: `cosine`, `topK`, `buildContext` (recorte al presupuesto de contexto) y validación zod de pregunta y respuesta (H4)
+- `embedder.ts` y prompts de pregunta (`askPrompt`) en `prompts.ts` (H4)
 - Troceado por frases: en páginas largas el fragmento acaba en un final de frase y el solape son frases completas; una página que cabe en el tope (una diapositiva) es un único fragmento y las diapositivas cortas no se juntan (H1d)
 - `splitSentences`: no corta en abreviaturas («p. ej.», «Fig. 3», «pág. 12»), iniciales, decimales ni listas numeradas; con tests (H1d)
 - Aviso «Troceado antiguo» en la lista de documentos subidos antes de H1d, con `chunkerVersion` opcional en `DocumentRecord` (sin cambio de esquema Dexie) (H1d)
