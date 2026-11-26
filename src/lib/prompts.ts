@@ -25,3 +25,20 @@ export function summaryPrompt(fragment: string, page: number): string {
     `No inventes nada que no esté en el texto.\n\n${fragment}`
   );
 }
+
+export const ASK_SYSTEM =
+  "Eres un tutor que responde preguntas sobre los apuntes de un estudiante. " +
+  "Respondes en español, con claridad y sin inventar nada. " +
+  "Usas SOLO los fragmentos que se te dan.";
+
+export function askPrompt(question: string, context: string): string {
+  return (
+    `Fragmentos de los apuntes (cada uno empieza con su página entre corchetes):\n\n${context}\n\n` +
+    `Pregunta: ${question}\n\n` +
+    `Reglas:\n` +
+    `- Responde solo con la información de los fragmentos.\n` +
+    `- Después de cada afirmación cita la página así: [p. 3]. Si usas varias, [p. 3] [p. 5].\n` +
+    `- Cita únicamente páginas que aparezcan en los fragmentos.\n` +
+    `- Si los fragmentos no contienen la respuesta, responde exactamente: "No aparece en tus apuntes."`
+  );
+}

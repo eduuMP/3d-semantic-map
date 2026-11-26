@@ -16,6 +16,7 @@ import {
 } from "@/lib/map-protocol";
 import { hasMap, hoverText, isMapStale } from "@/lib/map-view";
 import { useLlm } from "@/lib/use-llm";
+import { AskPanel } from "./ask-panel";
 import { SidePanel } from "./side-panel";
 import { Map3D, type MapPoint, type MapTopic } from "./map-3d";
 
@@ -369,19 +370,33 @@ export function MapPanel({
       )}
 
       {points.length > 0 && (
-        <Map3D
-          points={points}
-          topics={topics}
-          onSelect={(id) => {
-            llm.clearSummary();
-            setSelectedId(id);
-          }}
-          onSelectTopic={(id) => {
-            llm.clearSummary();
-            setSelectedId(null);
-            setSelectedTopicId(id);
-          }}
-        />
+        <>
+          <AskPanel
+            answer={llm.answer}
+            busy={llmBusy}
+            onAsk={(question) => llm.ask(subjectId, question)}
+            onStop={llm.cancel}
+            onOpenChunk={(id) => {
+              llm.clearSummary();
+              setSelectedTopicId(null);
+              setSelectedId(id);
+            }}
+          />
+          <Map3D
+            points={points}
+            topics={topics}
+            onSelect={(id) => {
+              llm.clearSummary();
+              setSelectedTopicId(null);
+              setSelectedId(id);
+            }}
+            onSelectTopic={(id) => {
+              llm.clearSummary();
+              setSelectedId(null);
+              setSelectedTopicId(id);
+            }}
+          />
+        </>
       )}
 
       {(selectedChunk || selectedTopic) && (
@@ -394,6 +409,10 @@ export function MapPanel({
             selectedChunk &&
             llm.summarize(selectedChunk.text, selectedChunk.page)
           }
+          onBack={() => {
+            llm.clearSummary();
+            setSelectedId(null);
+          }}
           onStop={llm.cancel}
           onOpenChunk={(id) => {
             llm.clearSummary();

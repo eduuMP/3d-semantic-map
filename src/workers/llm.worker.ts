@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { CreateMLCEngine, type MLCEngineInterface } from "@mlc-ai/web-llm";
 import { db } from "../lib/db";
+import { disposeEmbedder, embedQuery } from "../lib/embedder";
 import {
   isDeviceLostError,
   nextFallback,
@@ -8,11 +9,16 @@ import {
 } from "../lib/llm-models";
 import type { LlmErrorCode, LlmMessage, LlmRequest } from "../lib/llm-protocol";
 import {
+  ASK_SYSTEM,
   SUMMARY_SYSTEM,
+  askPrompt,
   TOPIC_LABEL_SYSTEM,
   summaryPrompt,
   topicLabelPrompt,
 } from "../lib/prompts";
+import { QuestionSchema } from "../lib/schemas";
+import { EMBEDDING_MODEL_ID } from "../lib/embedder";
+import { buildContext, parseAnswer, topK } from "../lib/retrieval";
 import {
   dedupeNames,
   parseTopicName,
@@ -266,6 +272,122 @@ async function summarize(
   }
 }
 
+/** Responde una pregunta con los fragmentos más parecidos del tema. */
+async function ask(
+  requestId: number,
+  subjectId: number,
+  topicId: number | undefined,
+  rawQuestion: string,
+  preferred: string | null,
+) {
+  const checked = QuestionSchema.safeParse(rawQuestion);
+  if (!checked.success)
+    throw new LlmError("bad-question", "pregunta no válida");
+  const question = checked.data;
+
+  // Sin tema se busca en toda la asignatura; con tema, solo en sus fragmentos.
+  const chunks =
+    topicId === undefined
+      ? await db.chunks.where("subjectId").equals(subjectId).toArray()
+      : await db.chunks.where("topicId").equals(topicId).toArray();
+  const own = chunks.filter((c) => c.subjectId === subjectId);
+  if (own.length === 0 || !own.some((c) => c.vector)) {
+    throw new LlmError("no-sources", "sin vectores");
+  }
+  const documents = await db.documents
+    .where("subjectId")
+    .equals(subjectId)
+    .toArray();
+  const names = new Map(documents.map((d) => [d.id, d.name]));
+
+  post({ type: "ask-status", requestId, phase: "embedding" });
+  let queryVector: Float32Array;
+  try {
+    queryVector = await embedQuery(question, (downloadedMb, totalMb) =>
+      post({
+        type: "loading",
+        model: EMBEDDING_MODEL_ID,
+        percent: totalMb > 0 ? Math.round((downloadedMb / totalMb) * 100) : 0,
+        text: `Descargando ${EMBEDDING_MODEL_ID}`,
+      }),
+    );
+  } catch (error) {
+    await disposeEmbedder();
+    throw new LlmError("embedding", messageOf(error));
+  }
+
+  const top = topK(
+    queryVector,
+    own.map((c) => ({
+      id: c.id,
+      page: c.page,
+      documentName: names.get(c.documentId) ?? "",
+      text: c.text,
+      vector: c.vector,
+    })),
+  );
+  const { context, used } = buildContext(top);
+  post({
+    type: "ask-sources",
+    requestId,
+    sources: used.map((s) => ({
+      chunkId: s.id,
+      page: s.page,
+      documentName: s.documentName,
+      excerpt: s.text.replace(/\s+/g, " ").trim().slice(0, 90),
+    })),
+  });
+
+  const llm = await loadEngine(preferred);
+  cancelled = false;
+  post({ type: "ask-status", requestId, phase: "answering" });
+  let full = "";
+  try {
+    const stream = await llm.chat.completions.create({
+      messages: [
+        { role: "system", content: ASK_SYSTEM },
+        { role: "user", content: askPrompt(question, context) },
+      ],
+      temperature: 0.2,
+      max_tokens: 500,
+      stream: true,
+    });
+    for await (const part of stream) {
+      if (cancelled) {
+        llm.interruptGenerate();
+        break;
+      }
+      const delta = part.choices[0]?.delta?.content;
+      if (delta) {
+        full += delta;
+        post({ type: "answer-token", requestId, text: delta });
+      }
+    }
+  } catch (error) {
+    if (isDeviceLostError(messageOf(error))) {
+      // Deja cargado un modelo menor para que el siguiente intento funcione.
+      await recoverEngine(preferred).catch(() => undefined);
+    }
+    throw new LlmError("generation", messageOf(error));
+  }
+
+  const parsed = parseAnswer(
+    full,
+    used.map((s) => s.page),
+  );
+  if (!parsed && !cancelled) {
+    throw new LlmError("generation", "respuesta vacía");
+  }
+  post({
+    type: "answer-done",
+    requestId,
+    text: parsed?.text ?? full.trim(),
+    cited: parsed?.cited ?? [],
+    unverified: parsed?.unverified ?? [],
+    notFound: parsed?.notFound ?? false,
+  });
+}
+
 self.onmessage = async (event: MessageEvent<LlmRequest>) => {
   const request = event.data;
   if (request.type === "cancel") {
@@ -275,6 +397,14 @@ self.onmessage = async (event: MessageEvent<LlmRequest>) => {
   try {
     if (request.type === "label-topics")
       await labelTopics(request.subjectId, request.preferredModel ?? null);
+    else if (request.type === "ask")
+      await ask(
+        request.requestId,
+        request.subjectId,
+        request.topicId,
+        request.question,
+        request.preferredModel ?? null,
+      );
     else if (request.type === "summarize")
       await summarize(
         request.requestId,
@@ -289,7 +419,10 @@ self.onmessage = async (event: MessageEvent<LlmRequest>) => {
       type: "error",
       code: known ? error.code : "unknown",
       message: messageOf(error),
-      requestId: request.type === "summarize" ? request.requestId : undefined,
+      requestId:
+        request.type === "summarize" || request.type === "ask"
+          ? request.requestId
+          : undefined,
     });
   }
 };

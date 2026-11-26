@@ -9,3 +9,9 @@ export const TopicNameSchema = z.object({
 });
 
 export type TopicName = z.infer<typeof TopicNameSchema>;
+
+/** Respuesta final a una pregunta: texto no vacío y de tamaño razonable. */
+export const AnswerTextSchema = z.string().trim().min(1).max(6000);
+
+/** La pregunta del usuario, antes de enviarla al modelo. */
+export const QuestionSchema = z.string().trim().min(3).max(500);
