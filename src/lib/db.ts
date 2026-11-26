@@ -159,7 +159,14 @@ export async function deleteSubjectCascade(
         .where("subjectId")
         .equals(subjectId)
         .primaryKeys();
+      // Las tarjetas siguen a su fragmento: «Recalcular mapa» borra los temas
+      // pero no las tarjetas, así que también se buscan por fragmento.
+      const chunkIds = await database.chunks
+        .where("subjectId")
+        .equals(subjectId)
+        .primaryKeys();
       await database.cards.where("topicId").anyOf(topicIds).delete();
+      await database.cards.where("chunkId").anyOf(chunkIds).delete();
       await database.topics.where("subjectId").equals(subjectId).delete();
       await database.chunks.where("subjectId").equals(subjectId).delete();
       await database.documents.where("subjectId").equals(subjectId).delete();

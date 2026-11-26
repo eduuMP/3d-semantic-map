@@ -42,3 +42,46 @@ export function askPrompt(question: string, context: string): string {
     `- Si los fragmentos no contienen la respuesta, responde exactamente: "No aparece en tus apuntes."`
   );
 }
+
+export const CARD_SYSTEM =
+  "Eres un tutor que crea tarjetas de estudio a partir de unos apuntes en español. " +
+  "Respondes SOLO con JSON válido, sin texto adicional.";
+
+export const CARD_JSON_SCHEMA = JSON.stringify({
+  type: "object",
+  properties: { pregunta: { type: "string" }, respuesta: { type: "string" } },
+  required: ["pregunta", "respuesta"],
+});
+
+/** Tipos de pregunta que se van alternando para que no sean todas «¿Qué es X?». */
+export const CARD_STYLES = [
+  "explique por qué o cómo ocurre algo",
+  "compare o distinga dos conceptos del texto",
+  "pida aplicar la idea a un ejemplo o caso concreto",
+  "pregunte por una condición, propiedad o consecuencia",
+] as const;
+
+/**
+ * `avoid`: preguntas que ya existen sobre este fragmento, para no repetirlas.
+ * `variant`: elige el tipo de pregunta (se reduce al número de tipos).
+ */
+export function cardPrompt(
+  fragment: string,
+  avoid: readonly string[] = [],
+  variant = 0,
+): string {
+  const style = CARD_STYLES[Math.abs(variant) % CARD_STYLES.length];
+  const already = avoid.length
+    ? `\n\nYa existen estas preguntas, haz una distinta sobre otra idea del texto:\n${avoid
+        .map((q) => `- ${q}`)
+        .join("\n")}`
+    : "";
+  return (
+    `Fragmento de los apuntes:\n\n${fragment}${already}\n\n` +
+    `Crea UNA tarjeta de estudio sobre un concepto importante del fragmento. ` +
+    `Evita la pregunta de definición «¿Qué es X?»: prefiere una que ${style}, si el texto lo permite. ` +
+    `La pregunta debe poder entenderse sin ver el texto (no digas «el fragmento» ni «la página») ` +
+    `y la respuesta debe ser breve (1 a 3 frases) y salir solo del fragmento. ` +
+    `Responde únicamente con este JSON: {"pregunta": "...", "respuesta": "..."}`
+  );
+}

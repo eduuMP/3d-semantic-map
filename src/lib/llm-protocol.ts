@@ -6,6 +6,7 @@ export type LlmErrorCode =
   | "embedding"
   | "no-sources"
   | "bad-question"
+  | "no-chunks"
   | "no-subject"
   | "unknown";
 
@@ -26,6 +27,14 @@ export type LlmRequest =
       /** Sin tema: se busca en toda la asignatura. */
       topicId?: number;
       question: string;
+      preferredModel?: string | null;
+    }
+  | {
+      type: "generate-cards";
+      requestId: number;
+      /** Fragmentos entre los que se reparten las tarjetas (todos los del tema, o uno). */
+      chunkIds: number[];
+      count: number;
       preferredModel?: string | null;
     }
   | { type: "cancel" };
@@ -57,6 +66,21 @@ export type LlmMessage =
       unverified: number[];
       notFound: boolean;
     }
+  | {
+      type: "cards-progress";
+      requestId: number;
+      done: number;
+      total: number;
+      saved: number;
+    }
+  | {
+      type: "cards-done";
+      requestId: number;
+      requested: number;
+      saved: number;
+      failed: number;
+      cancelled: boolean;
+    }
   | { type: "error"; code: LlmErrorCode; message: string; requestId?: number };
 
 export type AskSource = {
@@ -80,6 +104,8 @@ export const LLM_ERROR_MESSAGES: Record<LlmErrorCode, string> = {
     "No se pudo analizar la pregunta con el modelo de embeddings. Comprueba tu conexión (solo la primera vez) y vuelve a intentarlo.",
   "no-sources":
     "Aún no hay fragmentos analizados en esta asignatura. Pulsa «Generar mapa» y vuelve a preguntar.",
+  "no-chunks":
+    "No se encontraron fragmentos para crear tarjetas. Genera el mapa y vuelve a intentarlo.",
   "bad-question": "Escribe una pregunta de entre 3 y 500 caracteres.",
   "no-subject": "La asignatura ya no existe. Recarga la página.",
   unknown: "Algo falló con el modelo de lenguaje.",

@@ -12,6 +12,14 @@ import {
 export type LlmLoading = { model: string; percent: number; text: string };
 export type LlmLabeling = { current: number; total: number };
 export type LlmSummary = { text: string; done: boolean; error?: string };
+export type LlmCards = {
+  done: number;
+  total: number;
+  saved: number;
+  /** Solo cuando ha terminado. */
+  finished?: { requested: number; failed: number; cancelled: boolean };
+  error?: string;
+};
 export type LlmAnswer = {
   question: string;
   phase: "embedding" | "answering";
@@ -26,6 +34,7 @@ export type LlmAnswer = {
 
 /** Los ids de pregunta empiezan aquí para no chocar con los de resumen. */
 const ASK_ID_BASE = 1_000_000;
+const CARDS_ID_BASE = 2_000_000;
 
 /**
  * Gestiona el worker del LLM: se crea al primer uso (descarga el modelo solo
@@ -35,6 +44,7 @@ export function useLlm(options: { onLabeled?: () => void } = {}) {
   const workerRef = useRef<Worker | null>(null);
   const requestIdRef = useRef(0);
   const askIdRef = useRef(ASK_ID_BASE);
+  const cardsIdRef = useRef(CARDS_ID_BASE);
   const onLabeledRef = useRef(options.onLabeled);
   useEffect(() => {
     onLabeledRef.current = options.onLabeled;
@@ -44,6 +54,7 @@ export function useLlm(options: { onLabeled?: () => void } = {}) {
   const [labeling, setLabeling] = useState<LlmLabeling | null>(null);
   const [summary, setSummary] = useState<LlmSummary | null>(null);
   const [answer, setAnswer] = useState<LlmAnswer | null>(null);
+  const [cards, setCards] = useState<LlmCards | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
 
@@ -135,12 +146,58 @@ export function useLlm(options: { onLabeled?: () => void } = {}) {
               : prev,
           );
           break;
+        case "cards-progress":
+          if (message.requestId !== cardsIdRef.current) break;
+          setCards((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  done: message.done,
+                  total: message.total,
+                  saved: message.saved,
+                }
+              : prev,
+          );
+          break;
+        case "cards-done":
+          if (message.requestId !== cardsIdRef.current) break;
+          setCards((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  saved: message.saved,
+                  finished: {
+                    requested: message.requested,
+                    failed: message.failed,
+                    cancelled: message.cancelled,
+                  },
+                }
+              : prev,
+          );
+          break;
         case "error": {
           console.error(`[llm] ${message.code}: ${message.message}`);
           setLoading(null);
           setLabeling(null);
           const text = LLM_ERROR_MESSAGES[message.code];
           if (
+            message.requestId !== undefined &&
+            message.requestId >= CARDS_ID_BASE
+          ) {
+            if (message.requestId === cardsIdRef.current) {
+              setCards((prev) => ({
+                done: prev?.done ?? 0,
+                total: prev?.total ?? 0,
+                saved: prev?.saved ?? 0,
+                finished: {
+                  requested: prev?.total ?? 0,
+                  failed: 0,
+                  cancelled: false,
+                },
+                error: text,
+              }));
+            }
+          } else if (
             message.requestId !== undefined &&
             message.requestId >= ASK_ID_BASE
           ) {
@@ -231,6 +288,26 @@ export function useLlm(options: { onLabeled?: () => void } = {}) {
     [send],
   );
 
+  const generateCards = useCallback(
+    (chunkIds: number[], count: number) => {
+      cardsIdRef.current += 1;
+      setCards({ done: 0, total: count, saved: 0 });
+      send({
+        type: "generate-cards",
+        requestId: cardsIdRef.current,
+        chunkIds,
+        count,
+        preferredModel: readLastGoodModel(window.localStorage),
+      });
+    },
+    [send],
+  );
+
+  const clearCards = useCallback(() => {
+    cardsIdRef.current += 1;
+    setCards(null);
+  }, []);
+
   const clearAnswer = useCallback(() => {
     askIdRef.current += 1;
     setAnswer(null);
@@ -250,11 +327,14 @@ export function useLlm(options: { onLabeled?: () => void } = {}) {
     labeling,
     summary,
     answer,
+    cards,
     error,
     model,
     labelTopics,
     summarize,
     ask,
+    generateCards,
+    clearCards,
     clearAnswer,
     cancel,
     clearSummary,
