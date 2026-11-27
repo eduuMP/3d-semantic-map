@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Colorear el mapa por dominio: selector «Colorear por: Tema · Dominio»; en «Dominio» cada punto va de rojo a verde según los aciertos de las tarjetas de su fragmento y en gris si no se ha repasado nada; escala bajo el selector, dominio medio en la leyenda de cada tema y línea de dominio en el hover (H7)
+- El dominio se actualiza solo al repasar, sin recalcular el mapa y sin cambio de esquema Dexie (H7)
+- Lógica pura en `mastery.ts` con tests: `chunkMastery`, `groupMastery`, `masteryColor` (rojo → ámbar → verde) y los textos del hover (H7)
 - Repasar tarjetas: botón «Repasar (N)» en el panel de un tema; se da la vuelta a cada tarjeta y se marca «La sabía» o «No la sabía» (suma aciertos o fallos y guarda la fecha), con resumen «Sabías X de Y» al terminar (H6)
 - Orden de repaso: primero las de mayor tasa de fallo, luego las más falladas y las nunca repasadas antes que las acertadas; «Descartar tarjeta» con confirmación la borra del todo (H6)
 - Lógica pura en `review.ts` (`failRate`, `orderForReview`, `applyAnswer`, `summarizeSession`) y `recordReview` / `discardCard` en `db.ts`, con tests; sin cambio de esquema Dexie (H6)
