@@ -28,6 +28,7 @@ export function DocumentList({
   );
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   if (documents === null) {
     return (
@@ -54,12 +55,46 @@ export function DocumentList({
     }
   };
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-expanded={false}
+        aria-controls="panel-documentos"
+        className="fixed top-4 left-4 z-10 rounded-lg border border-current/30 bg-background px-3 py-1.5 text-sm font-medium shadow"
+      >
+        Documentos ({documents.length})
+      </button>
+    );
+  }
+
   return (
-    <section className="flex w-full max-w-xl flex-col gap-2 text-left">
-      <p className="text-sm font-medium">
-        {documents.length} {documents.length === 1 ? "documento" : "documentos"}{" "}
-        · {totalPages} páginas · {totalChunks} fragmentos
-      </p>
+    <aside
+      id="panel-documentos"
+      aria-label="Documentos subidos"
+      className="fixed top-0 left-0 z-20 flex h-full w-[min(22rem,100vw)] flex-col gap-3 overflow-y-auto border-r border-current/20 bg-background p-4 text-left shadow-xl"
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-medium">
+            {documents.length}{" "}
+            {documents.length === 1 ? "documento" : "documentos"}
+          </h2>
+          <p className="text-sm opacity-70">
+            {totalPages} páginas · {totalChunks} fragmentos
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-expanded
+          aria-controls="panel-documentos"
+          className="shrink-0 rounded border border-current/30 px-2 py-1 text-sm"
+        >
+          Cerrar
+        </button>
+      </header>
       <ul className="flex flex-col gap-2">
         {documents.map((doc) => (
           <li
@@ -120,6 +155,6 @@ export function DocumentList({
           {error}
         </p>
       )}
-    </section>
+    </aside>
   );
 }

@@ -154,24 +154,30 @@ export function SidePanel({
               onStop={onStop}
             />
 
-            <p className="text-sm opacity-80">
-              {topic.fragments.length}{" "}
-              {topic.fragments.length === 1 ? "fragmento" : "fragmentos"}. Elige
-              uno para leerlo.
-            </p>
-            <ul className="flex flex-col gap-1 text-sm">
-              {topic.fragments.map((f) => (
-                <li key={f.chunkId}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenChunk(f.chunkId)}
-                    className="w-full rounded border border-current/20 px-2 py-1 text-left break-words"
-                  >
-                    {f.documentName} · p. {f.page}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <details
+              key={`fragments-${topic.fragments.length}`}
+              className="text-sm"
+            >
+              <summary className="cursor-pointer font-medium">
+                {topic.fragments.length}{" "}
+                {topic.fragments.length === 1 ? "fragmento" : "fragmentos"} del
+                tema
+              </summary>
+              <p className="mt-2 opacity-80">Elige uno para leerlo.</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {topic.fragments.map((f) => (
+                  <li key={f.chunkId}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenChunk(f.chunkId)}
+                      className="w-full rounded border border-current/20 px-2 py-1 text-left break-words"
+                    >
+                      {f.documentName} · p. {f.page}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           </>
         )
       )}
