@@ -1,6 +1,7 @@
 "use client";
 
-import type { LlmSummary } from "@/lib/use-llm";
+import type { LlmCards, LlmSummary } from "@/lib/use-llm";
+import { CardsSection } from "./cards-section";
 
 export type PanelTopicInfo = {
   name: string;
@@ -8,6 +9,7 @@ export type PanelTopicInfo = {
 };
 
 export type PanelChunkInfo = {
+  chunkId: number;
   text: string;
   page: number;
   documentName: string;
@@ -18,9 +20,11 @@ type SidePanelProps = {
   topic: PanelTopicInfo | null;
   chunk: PanelChunkInfo | null;
   summary: LlmSummary | null;
+  cards: LlmCards | null;
   /** El LLM está cargando o nombrando temas: el botón espera. */
   llmBusy: boolean;
   onSummarize: () => void;
+  onGenerateCards: (chunkIds: number[], count: number) => void;
   /** Volver del fragmento a la lista del tema (solo si se llegó desde un tema). */
   onBack: () => void;
   onStop: () => void;
@@ -33,14 +37,19 @@ export function SidePanel({
   topic,
   chunk,
   summary,
+  cards,
   llmBusy,
   onSummarize,
+  onGenerateCards,
   onBack,
   onStop,
   onOpenChunk,
   onClose,
 }: SidePanelProps) {
   const summarizing = summary !== null && !summary.done;
+  const pageOf = (chunkId: number) =>
+    topic?.fragments.find((f) => f.chunkId === chunkId)?.page ??
+    (chunk?.chunkId === chunkId ? chunk.page : undefined);
 
   return (
     <aside
@@ -119,10 +128,30 @@ export function SidePanel({
               )}
             </section>
           )}
+
+          <CardsSection
+            chunkIds={[chunk.chunkId]}
+            variant="fragment"
+            pageOf={pageOf}
+            progress={cards}
+            busy={llmBusy}
+            onGenerate={onGenerateCards}
+            onStop={onStop}
+          />
         </>
       ) : (
         topic && (
           <>
+            <CardsSection
+              chunkIds={topic.fragments.map((f) => f.chunkId)}
+              variant="topic"
+              pageOf={pageOf}
+              progress={cards}
+              busy={llmBusy}
+              onGenerate={onGenerateCards}
+              onStop={onStop}
+            />
+
             <p className="text-sm opacity-80">
               {topic.fragments.length}{" "}
               {topic.fragments.length === 1 ? "fragmento" : "fragmentos"}. Elige

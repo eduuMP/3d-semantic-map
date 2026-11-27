@@ -181,6 +181,26 @@ describe("borrado en cascada", () => {
     expect(await database.cards.count()).toBe(1);
   });
 
+  it("deleteSubjectCascade borra también las tarjetas cuyo tema ya no existe", async () => {
+    const database = track(new AppDb(freshName()));
+    const { s2, d2 } = await seed(database);
+    // «Recalcular mapa» borra los temas y las tarjetas quedan con un topicId viejo.
+    await database.cards.add({
+      topicId: 9999,
+      chunkId: d2.chunkId,
+      question: "huérfana",
+      answer: "a",
+      correct: 0,
+      wrong: 0,
+    });
+
+    await deleteSubjectCascade(s2, database);
+
+    const left = await database.cards.toArray();
+    expect(left.map((c) => c.question)).not.toContain("huérfana");
+    expect(left).toHaveLength(1);
+  });
+
   it("deleteDocumentCascade borra el documento, sus fragmentos y sus tarjetas", async () => {
     const database = track(new AppDb(freshName()));
     const { d1, d2 } = await seed(database);

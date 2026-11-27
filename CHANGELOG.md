@@ -5,6 +5,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Generar tarjetas de estudio: en el panel de un tema, «Generar tarjetas» crea N (5 por defecto, máximo 10) con una llamada al LLM por tarjeta y salida `{pregunta, respuesta}` restringida por esquema y validada con zod; progreso «tarjeta 3 de 5», botón «Parar» que conserva las ya guardadas y lista de tarjetas con respuesta plegable y página (H5)
+- «Hacerme preguntas» en el panel de un fragmento: genera 3 tarjetas de ese fragmento sin repetir las anteriores (H5)
+- Lógica pura en `cards.ts` con tests: `parseCard` (descarta preguntas que hablan de «el fragmento» o «la página»), `isDuplicate` (también descarta la misma pregunta con otra redacción o en plural), `isDefinitional` (en el primer intento se rechaza «¿Qué es X?» para variar el tipo de pregunta; el reintento la admite), `planJobs` (prioriza fragmentos sin tarjetas y los más cercanos al centroide) y `runCardJobs` (descarta inválidas y repetidas, reintenta solo la que falla una vez, entrega cada tarjeta al guardarse) (H5)
+- Las tarjetas se enlazan al fragmento (`chunkId`), no al tema, para sobrevivir a «Recalcular mapa»; sin cambio de esquema Dexie (H5)
 - Preguntar a un tema: pestaña de preguntas en el panel lateral; la pregunta se embebe en el navegador, se recuperan los 4 fragmentos más parecidos (coseno) dentro del tema y el LLM responde en streaming citando `[p. X]`; si los fragmentos no la contienen responde «No aparece en tus apuntes.» (H4)
 - Lógica pura con tests en `retrieval.ts`: `cosine`, `topK`, `buildContext` (recorte al presupuesto de contexto) y validación zod de pregunta y respuesta (H4)
 - `embedder.ts` y prompts de pregunta (`askPrompt`) en `prompts.ts` (H4)
@@ -55,4 +59,5 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 - `README.md` y `CHANGELOG.md` dejan de estar en `.gitignore` y se versionan (H0)
 
 ### Fixed
+- Borrar una asignatura también borra las tarjetas de sus fragmentos aunque su tema ya no exista (H5)
 - Tildes rotas en PDFs hechos con LaTeX (`Matem´ aticas`, `m´ ın`, `Espa˜ na`): se recomponen al normalizar el texto de cada página; también se quitan caracteres de control y de uso privado. Hay que volver a subir los PDFs ya cargados (H1)

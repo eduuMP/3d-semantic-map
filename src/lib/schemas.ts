@@ -15,3 +15,13 @@ export const AnswerTextSchema = z.string().trim().min(1).max(6000);
 
 /** La pregunta del usuario, antes de enviarla al modelo. */
 export const QuestionSchema = z.string().trim().min(3).max(500);
+
+const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** Salida del LLM al generar una tarjeta de estudio. */
+export const CardSchema = z.object({
+  pregunta: z.string().transform(collapse).pipe(z.string().min(8).max(300)),
+  respuesta: z.string().transform(collapse).pipe(z.string().min(2).max(600)),
+});
+
+export type CardOutput = z.infer<typeof CardSchema>;

@@ -94,7 +94,15 @@ export function MapPanel({
     undefined,
   );
   const llm = useLlm();
-  const llmBusy = llm.loading !== null || llm.labeling !== null;
+  const { clearSummary, clearCards, cards } = llm;
+  const cardsRunning = cards !== null && !cards.finished;
+  const llmBusy =
+    llm.loading !== null || llm.labeling !== null || cardsRunning;
+  /** Al cambiar de tema o fragmento se limpian resumen y avisos; una generación en curso sigue. */
+  const clearPanelState = () => {
+    clearSummary();
+    if (!cards || cards.finished) clearCards();
+  };
   const onBusyRef = useRef(onBusyChange);
   useEffect(() => {
     onBusyRef.current = onBusyChange;
@@ -162,6 +170,7 @@ export function MapPanel({
     if (!chunk) return null;
     const topic = data.topics.find((t) => t.id === chunk.topicId);
     return {
+      chunkId: chunk.id,
       text: chunk.text,
       page: chunk.page,
       documentName:
@@ -377,7 +386,7 @@ export function MapPanel({
             onAsk={(question) => llm.ask(subjectId, question)}
             onStop={llm.cancel}
             onOpenChunk={(id) => {
-              llm.clearSummary();
+              clearPanelState();
               setSelectedTopicId(null);
               setSelectedId(id);
             }}
@@ -386,12 +395,12 @@ export function MapPanel({
             points={points}
             topics={topics}
             onSelect={(id) => {
-              llm.clearSummary();
+              clearPanelState();
               setSelectedTopicId(null);
               setSelectedId(id);
             }}
             onSelectTopic={(id) => {
-              llm.clearSummary();
+              clearPanelState();
               setSelectedId(null);
               setSelectedTopicId(id);
             }}
@@ -404,22 +413,24 @@ export function MapPanel({
           topic={selectedTopic}
           chunk={selectedChunk}
           summary={llm.summary}
+          cards={llm.cards}
+          onGenerateCards={llm.generateCards}
           llmBusy={llmBusy}
           onSummarize={() =>
             selectedChunk &&
             llm.summarize(selectedChunk.text, selectedChunk.page)
           }
           onBack={() => {
-            llm.clearSummary();
+            clearPanelState();
             setSelectedId(null);
           }}
           onStop={llm.cancel}
           onOpenChunk={(id) => {
-            llm.clearSummary();
+            clearPanelState();
             setSelectedId(id);
           }}
           onClose={() => {
-            llm.clearSummary();
+            clearPanelState();
             setSelectedId(null);
             setSelectedTopicId(null);
           }}

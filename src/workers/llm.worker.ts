@@ -10,12 +10,16 @@ import {
 import type { LlmErrorCode, LlmMessage, LlmRequest } from "../lib/llm-protocol";
 import {
   ASK_SYSTEM,
+  CARD_JSON_SCHEMA,
+  CARD_SYSTEM,
   SUMMARY_SYSTEM,
   askPrompt,
+  cardPrompt,
   TOPIC_LABEL_SYSTEM,
   summaryPrompt,
   topicLabelPrompt,
 } from "../lib/prompts";
+import { MAX_CHARS_PER_FRAGMENT, planJobs, runCardJobs } from "../lib/cards";
 import { QuestionSchema } from "../lib/schemas";
 import { EMBEDDING_MODEL_ID } from "../lib/embedder";
 import { buildContext, parseAnswer, topK } from "../lib/retrieval";
@@ -388,6 +392,110 @@ async function ask(
   });
 }
 
+/** Genera tarjetas (una llamada por tarjeta) y las guarda según salen. */
+async function generateCards(
+  requestId: number,
+  chunkIds: number[],
+  count: number,
+  preferred: string | null,
+) {
+  // Antes de cualquier await: un «Parar» durante la carga del modelo no se pierde.
+  cancelled = false;
+  const chunks = (await db.chunks.bulkGet(chunkIds)).filter(
+    (c): c is NonNullable<typeof c> => !!c,
+  );
+  if (chunks.length === 0) throw new LlmError("no-chunks", "sin fragmentos");
+  const byId = new Map(chunks.map((c) => [c.id, c]));
+
+  const existingCards = await db.cards
+    .where("chunkId")
+    .anyOf(chunks.map((c) => c.id))
+    .toArray();
+  const existing = new Map<number, string[]>();
+  for (const card of existingCards) {
+    existing.set(card.chunkId, [
+      ...(existing.get(card.chunkId) ?? []),
+      card.question,
+    ]);
+  }
+  const jobs = planJobs(chunks, count, new Set(existing.keys()));
+
+  let llm = await loadEngine(preferred);
+  if (cancelled) {
+    post({
+      type: "cards-done",
+      requestId,
+      requested: jobs.length,
+      saved: 0,
+      failed: 0,
+      cancelled: true,
+    });
+    return;
+  }
+  post({
+    type: "cards-progress",
+    requestId,
+    done: 0,
+    total: jobs.length,
+    saved: 0,
+  });
+
+  const result = await runCardJobs({
+    jobs,
+    existing,
+    isCancelled: () => cancelled,
+    generate: async (chunkId, avoid, attempt) => {
+      const text = byId.get(chunkId)!.text.replace(/\s+/g, " ").trim();
+      try {
+        const reply = await llm.chat.completions.create({
+          messages: [
+            { role: "system", content: CARD_SYSTEM },
+            {
+              role: "user",
+              content: cardPrompt(
+                text.slice(0, MAX_CHARS_PER_FRAGMENT),
+                avoid,
+                avoid.length + attempt + chunkId,
+              ),
+            },
+          ],
+          temperature: attempt === 0 ? 0.3 : 0.7,
+          max_tokens: 300,
+          response_format: { type: "json_object", schema: CARD_JSON_SCHEMA },
+        });
+        return reply.choices[0]?.message?.content ?? null;
+      } catch (error) {
+        console.warn("[llm] fallo al crear una tarjeta:", messageOf(error));
+        if (isDeviceLostError(messageOf(error))) {
+          // Baja de modelo y deja que el reintento use el nuevo motor.
+          llm = await recoverEngine(preferred);
+        }
+        return null;
+      }
+    },
+    onCard: async (card) => {
+      await db.cards.add({
+        topicId: byId.get(card.chunkId)?.topicId ?? 0,
+        chunkId: card.chunkId,
+        question: card.question,
+        answer: card.answer,
+        correct: 0,
+        wrong: 0,
+      });
+    },
+    onProgress: (done, total, saved) =>
+      post({ type: "cards-progress", requestId, done, total, saved }),
+  });
+  post({
+    type: "cards-done",
+    requestId,
+    requested: jobs.length,
+    saved: result.saved,
+    failed: result.failed,
+    cancelled: result.cancelled,
+  });
+}
+
 self.onmessage = async (event: MessageEvent<LlmRequest>) => {
   const request = event.data;
   if (request.type === "cancel") {
@@ -405,6 +513,13 @@ self.onmessage = async (event: MessageEvent<LlmRequest>) => {
         request.question,
         request.preferredModel ?? null,
       );
+    else if (request.type === "generate-cards")
+      await generateCards(
+        request.requestId,
+        request.chunkIds,
+        request.count,
+        request.preferredModel ?? null,
+      );
     else if (request.type === "summarize")
       await summarize(
         request.requestId,
@@ -420,7 +535,9 @@ self.onmessage = async (event: MessageEvent<LlmRequest>) => {
       code: known ? error.code : "unknown",
       message: messageOf(error),
       requestId:
-        request.type === "summarize" || request.type === "ask"
+        request.type === "summarize" ||
+        request.type === "ask" ||
+        request.type === "generate-cards"
           ? request.requestId
           : undefined,
     });
