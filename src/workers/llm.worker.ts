@@ -399,6 +399,8 @@ async function generateCards(
   count: number,
   preferred: string | null,
 ) {
+  // Antes de cualquier await: un «Parar» durante la carga del modelo no se pierde.
+  cancelled = false;
   const chunks = (await db.chunks.bulkGet(chunkIds)).filter(
     (c): c is NonNullable<typeof c> => !!c,
   );
@@ -419,7 +421,17 @@ async function generateCards(
   const jobs = planJobs(chunks, count, new Set(existing.keys()));
 
   let llm = await loadEngine(preferred);
-  cancelled = false;
+  if (cancelled) {
+    post({
+      type: "cards-done",
+      requestId,
+      requested: jobs.length,
+      saved: 0,
+      failed: 0,
+      cancelled: true,
+    });
+    return;
+  }
   post({
     type: "cards-progress",
     requestId,
