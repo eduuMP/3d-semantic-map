@@ -54,7 +54,7 @@ export function CardsSection({
   const total = variant === "topic" ? count : FRAGMENT_CARD_COUNT;
   const note = progress ? noteOf(progress) : null;
 
-  if (reviewing && cards && cards.length > 0) {
+  if (reviewing && cards) {
     return (
       <ReviewMode
         cards={cards}

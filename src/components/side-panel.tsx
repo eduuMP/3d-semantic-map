@@ -130,6 +130,7 @@ export function SidePanel({
           )}
 
           <CardsSection
+            key={`chunk-${chunk.chunkId}`}
             chunkIds={[chunk.chunkId]}
             variant="fragment"
             pageOf={pageOf}
@@ -143,6 +144,7 @@ export function SidePanel({
         topic && (
           <>
             <CardsSection
+              key={`topic-${topic.fragments.map((f) => f.chunkId).join(",")}`}
               chunkIds={topic.fragments.map((f) => f.chunkId)}
               variant="topic"
               pageOf={pageOf}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { discardCard, recordReview, type CardRecord } from "@/lib/db";
 import { orderForReview, summarizeSession } from "@/lib/review";
 
@@ -19,6 +19,9 @@ export function ReviewMode({ cards, pageOf, onExit }: ReviewModeProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Evita registrar dos veces una respuesta con un doble clic. */
+  const saving = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   const current = queue[index];
 
@@ -29,19 +32,27 @@ export function ReviewMode({ cards, pageOf, onExit }: ReviewModeProps) {
   };
 
   const answer = async (knew: boolean) => {
-    if (!current) return;
+    if (!current || saving.current) return;
+    saving.current = true;
+    setBusy(true);
     setError(null);
     try {
-      await recordReview(current.id, knew);
-      setAnswers((prev) => [...prev, knew]);
+      const saved = await recordReview(current.id, knew);
+      // Si la tarjeta ya no existe (p. ej. se borró el documento) se avanza sin contarla.
+      if (saved) setAnswers((prev) => [...prev, knew]);
       advance();
     } catch {
       setError("No se pudo guardar la respuesta. Inténtalo de nuevo.");
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
   };
 
   const discard = async () => {
-    if (!current) return;
+    if (!current || saving.current) return;
+    saving.current = true;
+    setBusy(true);
     setError(null);
     try {
       await discardCard(current.id);
@@ -51,6 +62,9 @@ export function ReviewMode({ cards, pageOf, onExit }: ReviewModeProps) {
       setConfirmDiscard(false);
     } catch {
       setError("No se pudo descartar la tarjeta. Inténtalo de nuevo.");
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
   };
 
@@ -120,15 +134,17 @@ export function ReviewMode({ cards, pageOf, onExit }: ReviewModeProps) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            disabled={busy}
             onClick={() => answer(true)}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white"
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             La sabía
           </button>
           <button
             type="button"
+            disabled={busy}
             onClick={() => answer(false)}
-            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             No la sabía
           </button>
@@ -140,8 +156,9 @@ export function ReviewMode({ cards, pageOf, onExit }: ReviewModeProps) {
           <span>¿Descartar esta tarjeta para siempre?</span>
           <button
             type="button"
+            disabled={busy}
             onClick={discard}
-            className="rounded border border-red-600 px-2 py-1 text-red-600"
+            className="rounded border border-red-600 px-2 py-1 text-red-600 disabled:opacity-50"
           >
             Sí, descartar
           </button>
