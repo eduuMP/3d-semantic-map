@@ -15,6 +15,7 @@ import {
   type MapPhase,
 } from "@/lib/map-protocol";
 import { hasMap, hoverText, isMapStale } from "@/lib/map-view";
+import { chunkMastery, groupMastery, masteryHover } from "@/lib/mastery";
 import { useLlm } from "@/lib/use-llm";
 import { AskPanel } from "./ask-panel";
 import { SidePanel } from "./side-panel";
@@ -93,11 +94,20 @@ export function MapPanel({
     [subjectId, dataVersion],
     undefined,
   );
+  // Tarjetas (pocas y sin vectores): se actualizan solas al repasar, sin tocar el mapa.
+  const cardRows = useLiveQuery(
+    () =>
+      db.cards.toArray().catch((e) => {
+        console.error("[map-panel] no se pudieron leer las tarjetas", e);
+        return [];
+      }),
+    [],
+    [],
+  );
   const llm = useLlm();
   const { clearSummary, clearCards, cards } = llm;
   const cardsRunning = cards !== null && !cards.finished;
-  const llmBusy =
-    llm.loading !== null || llm.labeling !== null || cardsRunning;
+  const llmBusy = llm.loading !== null || llm.labeling !== null || cardsRunning;
   /** Al cambiar de tema o fragmento se limpian resumen y avisos; una generación en curso sigue. */
   const clearPanelState = () => {
     clearSummary();
@@ -131,11 +141,18 @@ export function MapPanel({
       };
     }
     const names = new Map(data.documents.map((d) => [d.id, d.name]));
+    const mastery = chunkMastery(cardRows);
     const usedTopics = new Set<number>();
+    const topicChunks = new Map<number, number[]>();
     const pts: MapPoint[] = [];
     for (const chunk of data.chunks) {
       if (!chunk.xyz || chunk.topicId === undefined) continue;
       usedTopics.add(chunk.topicId);
+      topicChunks.set(chunk.topicId, [
+        ...(topicChunks.get(chunk.topicId) ?? []),
+        chunk.id,
+      ]);
+      const own = mastery.get(chunk.id);
       pts.push({
         x: chunk.xyz[0],
         y: chunk.xyz[1],
@@ -147,6 +164,8 @@ export function MapPanel({
           chunk.page,
           names.get(chunk.documentId) ?? "",
         ),
+        masteryRate: own?.rate ?? null,
+        masteryHover: masteryHover(own),
       });
     }
     return {
@@ -154,14 +173,18 @@ export function MapPanel({
       topics: data.topics
         .filter((t) => usedTopics.has(t.id))
         .sort((a, b) => a.id - b.id)
-        .map((t) => ({ id: t.id, name: t.name ?? `Tema ${t.id}` })),
+        .map((t) => ({
+          id: t.id,
+          name: t.name ?? `Tema ${t.id}`,
+          masteryRate: groupMastery(topicChunks.get(t.id) ?? [], mastery).rate,
+        })),
       mapped: hasMap(data.chunks),
       stale: isMapStale(data.chunks),
       chunkCount: data.chunks.length,
       // Los temas recién creados se llaman «Tema N» hasta que el LLM los nombra.
       unnamed: data.topics.some((t) => !t.name || /^Tema \d+$/.test(t.name)),
     };
-  }, [data]);
+  }, [data, cardRows]);
 
   // Fragmento abierto en el panel (null si ya no existe, p. ej. tras quitar un PDF).
   const selectedChunk = useMemo(() => {
