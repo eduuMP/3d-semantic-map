@@ -5,6 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). `fea
 ## [Unreleased]
 
 ### Added
+- Repasar tarjetas: botón «Repasar (N)» en el panel de un tema; se da la vuelta a cada tarjeta y se marca «La sabía» o «No la sabía» (suma aciertos o fallos y guarda la fecha), con resumen «Sabías X de Y» al terminar (H6)
+- Orden de repaso: primero las de mayor tasa de fallo, luego las más falladas y las nunca repasadas antes que las acertadas; «Descartar tarjeta» con confirmación la borra del todo (H6)
+- Lógica pura en `review.ts` (`failRate`, `orderForReview`, `applyAnswer`, `summarizeSession`) y `recordReview` / `discardCard` en `db.ts`, con tests; sin cambio de esquema Dexie (H6)
 - Generar tarjetas de estudio: en el panel de un tema, «Generar tarjetas» crea N (5 por defecto, máximo 10) con una llamada al LLM por tarjeta y salida `{pregunta, respuesta}` restringida por esquema y validada con zod; progreso «tarjeta 3 de 5», botón «Parar» que conserva las ya guardadas y lista de tarjetas con respuesta plegable y página (H5)
 - «Hacerme preguntas» en el panel de un fragmento: genera 3 tarjetas de ese fragmento sin repetir las anteriores (H5)
 - Lógica pura en `cards.ts` con tests: `parseCard` (descarta preguntas que hablan de «el fragmento» o «la página»), `isDuplicate` (también descarta la misma pregunta con otra redacción o en plural), `isDefinitional` (en el primer intento se rechaza «¿Qué es X?» para variar el tipo de pregunta; el reintento la admite), `planJobs` (prioriza fragmentos sin tarjetas y los más cercanos al centroide) y `runCardJobs` (descarta inválidas y repetidas, reintenta solo la que falla una vez, entrega cada tarjeta al guardarse) (H5)

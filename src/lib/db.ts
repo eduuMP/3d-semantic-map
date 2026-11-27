@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import { applyAnswer } from "./review";
 
 export const DEFAULT_SUBJECT_NAME = "Mis apuntes";
 
@@ -138,6 +139,26 @@ export async function deleteDocumentCascade(
       }
     },
   );
+}
+
+/** Suma un acierto o un fallo a la tarjeta. Devuelve false si ya no existe. */
+export async function recordReview(
+  cardId: number,
+  knew: boolean,
+  now: number = Date.now(),
+  database: AppDb = db,
+): Promise<boolean> {
+  return database.transaction("rw", database.cards, async () => {
+    const card = await database.cards.get(cardId);
+    if (!card) return false;
+    await database.cards.update(cardId, applyAnswer(card, knew, now));
+    return true;
+  });
+}
+
+/** Borra una tarjeta suelta (el botón «Descartar» del repaso). */
+export async function discardCard(cardId: number, database: AppDb = db) {
+  await database.cards.delete(cardId);
 }
 
 /** Borra una asignatura con sus documentos, fragmentos, temas y tarjetas. */

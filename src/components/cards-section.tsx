@@ -9,6 +9,7 @@ import {
 } from "@/lib/cards";
 import { db } from "@/lib/db";
 import type { LlmCards } from "@/lib/use-llm";
+import { ReviewMode } from "./review-mode";
 
 type CardsSectionProps = {
   /** Fragmentos entre los que se reparten las tarjetas. */
@@ -42,6 +43,7 @@ export function CardsSection({
   onStop,
 }: CardsSectionProps) {
   const [count, setCount] = useState(DEFAULT_CARD_COUNT);
+  const [reviewing, setReviewing] = useState(false);
   const key = chunkIds.join(",");
   const cards = useLiveQuery(
     () => db.cards.where("chunkId").anyOf(chunkIds).toArray(),
@@ -51,6 +53,16 @@ export function CardsSection({
   const generating = progress !== null && !progress.finished;
   const total = variant === "topic" ? count : FRAGMENT_CARD_COUNT;
   const note = progress ? noteOf(progress) : null;
+
+  if (reviewing && cards && cards.length > 0) {
+    return (
+      <ReviewMode
+        cards={cards}
+        pageOf={pageOf}
+        onExit={() => setReviewing(false)}
+      />
+    );
+  }
 
   return (
     <section aria-label="Tarjetas" className="flex flex-col gap-2">
@@ -87,6 +99,14 @@ export function CardsSection({
           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         >
           {variant === "topic" ? "Generar tarjetas" : "Hacerme preguntas"}
+        </button>
+        <button
+          type="button"
+          disabled={generating || !cards || cards.length === 0}
+          onClick={() => setReviewing(true)}
+          className="rounded border border-current/30 px-3 py-1.5 text-sm disabled:opacity-50"
+        >
+          Repasar{cards && cards.length > 0 ? ` (${cards.length})` : ""}
         </button>
         {generating && (
           <button
